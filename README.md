@@ -9,6 +9,7 @@
 - 버전: v12 (v11에서 핵심만 남기고 덜어낸 판, 폰 가로 화면 지원)
 - 플레이: `dist/index.html`을 브라우저로 열면 바로 된다. 인터넷 연결은 필요하다(three.js를 CDN에서 받음). 폰은 가로로 들고 한다.
 - 공개 링크(작업자 계정 비공개 아티팩트): https://claude.ai/artifact/K2fKfUXg8q79ACiVMjHk2c
+- 시험 갈래 `v12-stop`(벨트 정지 반응 시험, 브랜치): https://claude.ai/artifact/2veiV9GwGgzi8DjVwQRtTS
 
 ## 고치고 확인하는 법
 
