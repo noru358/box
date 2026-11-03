@@ -8,6 +8,7 @@ function fill(w) { const n = w.tiles.flat().filter(Boolean).length; for (let i =
 
 // 1. 맵마다 상자가 막히지 않고 계속 흐르고 출고된다(색 켬·끔 둘 다)
 for (const k of Object.keys(E.MAPS)) for (const colors of [true, false]) {
+  if (k === 'switch' && colors) continue; // 분기 맵은 색 끔 전용
   const w = E.createWorld(E.MAPS[k].str, { colors }); fill(w);
   const sig = E.signalAI(E.DIFF.normal);
   let del = 0;
@@ -95,6 +96,16 @@ for (const k of Object.keys(E.MAPS)) for (const colors of [true, false]) {
   }
   }
   ok(tested, '도장 판정 시험 상황을 만들었다');
+}
+
+// 9. 분기 맵: 일반 상자는 분기 칸이나 그 바로 앞뒤에서만 넘어가고, 덜컹 이벤트에 분기 칸 여부가 붙는다
+{
+  const w = E.createWorld(E.MAPS.switch.str, { colors: false }); fill(w);
+  const sig = E.signalAI(E.DIFF.normal); let on = 0, near = 0, off = 0, flag = 0;
+  const oh = w.hop; w.hop = function (b, h) { const sw = w.isSwitch(b.cx, b.cy), nr = w.nearSwitch(b.cx, b.cy); const r = oh.call(w, b, h); if (r) { if (sw) on++; else if (nr) near++; else off++; } return r; };
+  for (let i = 0; i < 30 * 120; i++) { sig(w, 1 / 30); w.step(1 / 30); flag += w.events.filter(e => e.type === 'thud' && e.sw).length; w.events = []; }
+  ok(off === 0 && on > near && on > 50, `분기 맵: 일반 상자 넘어가기 분기 칸 ${on}, 바로 앞뒤 ${near}, 그 밖 ${off}`);
+  ok(flag === on, `분기 맵: 분기 칸에서 넘어간 덜컹에 sw 표시 (${flag}/${on})`);
 }
 
 console.log(failed ? `\n${failed}개 실패` : '\n엔진 테스트 전부 통과');

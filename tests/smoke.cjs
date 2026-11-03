@@ -83,8 +83,8 @@ try {
   // 기다리는 사이 직원에게 찍혀 판이 끝났을 수도 있다
   if (!global.__box.over) { els.pauseBtn.onclick(); els.quit.onclick(); } else els.toMenu.onclick();
 
-  els.bHide.onclick(); run(300); els.fakeBtn.onclick && els.fakeBtn.onclick(); run(2400);
-  ok(/도장/.test(els.goalL.innerHTML) || /통과|실패/.test(els.panelBox.innerHTML), '숨는 쪽 한 판(80초)이 끝까지 돈다');
+  els.bHide.onclick(); run(300); els.fakeBtn.onclick && els.fakeBtn.onclick(); run(3200);
+  ok(/도장/.test(els.goalL.innerHTML) || /통과|실패/.test(els.panelBox.innerHTML), '숨는 쪽 한 판(105초)이 끝까지 돈다');
 
   {
     const H = global.__box.human;
@@ -95,8 +95,8 @@ try {
     const B = global.__box, n = B.world.boxes.filter(b => !b.gone).length;
     ok(n <= 17, `찾는 쪽 상자 수 ${n}개 (17개 이하)`);
   }
-  els.lookBtn.onclick && els.lookBtn.onclick(); run(2400);
-  ok(/찾음/.test(els.goalL.innerHTML) || /통과|실패/.test(els.panelBox.innerHTML), '찾는 쪽 한 판(80초)이 끝까지 돈다');
+  els.lookBtn.onclick && els.lookBtn.onclick(); run(3200);
+  ok(/찾음/.test(els.goalL.innerHTML) || /통과|실패/.test(els.panelBox.innerHTML), '찾는 쪽 한 판(105초)이 끝까지 돈다');
   {
     const bots = global.__box.bots;
     ok(bots.length === 3 && bots.every(b => Array.isArray(b.plan) && (b.src === 'synth' || b.src === 'human')), `숨은 셋이 창(초록마다 계획)으로 움직인다 (${bots.map(b => b.src).join(',')})`);

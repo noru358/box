@@ -4,12 +4,16 @@
 const DIRS='>v<^',DX=[1,0,-1,0],DY=[0,1,0,-1];
 const SPD={n:1,f:1.55,s:.6},BASE=1.25; // 칸/초
 const CYCLE=4,ON=1.2,WARN=1;
-const WANDER=.45; // 색 끔일 때 일반 상자가 초록에 옆으로 옮기는 빈도(초당, 한 초록에 한 번까지)
+const WANDER=.45;
+// 분기 칸(v12-switch): 'W' 기호. 일반 상자는 분기 칸에서만 옆 레일로 간다(지날 때 SW_P 확률, 초록일 때).
+// 미끼: 분기 칸 바로 앞뒤 칸에서 SW_BAIT 확률로 넘어가는 일반 상자도 있다. 사람은 어디서든 넘어갈 수 있지만 분기 칸이 아니면 티가 난다.
+const SW_P=.55,SW_BAIT=.06; // 색 끔일 때 일반 상자가 초록에 옆으로 옮기는 빈도(초당, 한 초록에 한 번까지)
 const DIFF={easy:{name:'쉬움',yellow:.65,late:.35,green:[1.6,4.2],red:[1.4,2.4],fake:.12,aim:1.0,slack:1.6,k:1.4},normal:{name:'보통',yellow:.45,late:.22,green:[1.0,3.8],red:[1.6,2.8],fake:.2,aim:.75,slack:1.25,k:1},hard:{name:'어려움',yellow:.3,late:.12,green:[.6,3.4],red:[1.8,3.2],fake:.3,aim:.55,slack:1.0,k:.7}};
 function laneMap(rows,bars){const W=14,g=[Array(W).fill('..')];
   rows.forEach(r=>{const t=Array(W).fill(r.sp+r.d);const right=r.d==='>';t[right?0:W-1]='I'+r.d;t[right?W-1:0]='X'+r.d+r.c;bars.forEach(c=>t[c]='S'+r.d);Object.entries(r.ex||{}).forEach(([k,v])=>t[+k]=v);g.push(t);});
   g.push(Array(W).fill('..'));return g.map(r=>r.join(' ')).join('/');}
 const MAPS={
+  switch:{name:'분기',str:laneMap([{d:'>',sp:'n',c:0,ex:{3:'W>',7:'W>',11:'W>'}},{d:'<',sp:'n',c:1,ex:{5:'W<',9:'W<'}},{d:'>',sp:'n',c:2,ex:{3:'W>',7:'W>',11:'W>'}},{d:'>',sp:'n',c:3,ex:{5:'W>',9:'W>'}}],[])},
   plain:{name:'기본',str:laneMap([{d:'>',sp:'n',c:0},{d:'<',sp:'n',c:1},{d:'>',sp:'n',c:2},{d:'>',sp:'n',c:3}],[])},
   basic:{name:'기본(섞임)',str:laneMap([{d:'>',sp:'n',c:0},{d:'<',sp:'f',c:1},{d:'>',sp:'s',c:2,ex:{6:'J>'}},{d:'>',sp:'n',c:3}],[])},
   five:{name:'다섯 줄',str:laneMap([{d:'>',sp:'n',c:0},{d:'>',sp:'f',c:1,ex:{5:'C>3'}},{d:'<',sp:'n',c:2},{d:'>',sp:'s',c:3,ex:{8:'J>'}},{d:'<',sp:'n',c:4,ex:{10:'C<0'}}],[])}
@@ -17,10 +21,11 @@ const MAPS={
 function parseTile(tok){if(!tok||tok==='..')return null;const t=tok[0],d=DIRS.indexOf(tok[1]);if(d<0)return null;
   switch(t){case 'n':case 'f':case 's':return {t:'belt',sp:t,d};
     case 'S':return {t:'belt',sp:'n',d};
+    case 'W':return {t:'belt',sp:'n',d,sw:true};
     case 'T':{const s=DIRS.indexOf(tok[2]);return s<0?null:{t:'turn',d,s,per:Math.max(1,+tok[3]||2)};}
     case 'J':return {t:'jam',d};case 'C':return {t:'relabel',d,c:Math.min(4,+tok[2]||0)};case 'X':return {t:'exit',d,c:Math.min(4,+tok[2]||0)};
     case 'I':return {t:'spawn',d};case 'G':return {t:'belt',sp:'n',d};}return null;}
-function tileToken(t){if(!t)return '..';const D=DIRS[t.d];switch(t.t){case 'belt':return t.sp+D;case 'sort':return 'S'+D;case 'turn':return 'T'+D+DIRS[t.s]+t.per;
+function tileToken(t){if(!t)return '..';const D=DIRS[t.d];switch(t.t){case 'belt':return (t.sw?'W':t.sp)+D;case 'sort':return 'S'+D;case 'turn':return 'T'+D+DIRS[t.s]+t.per;
   case 'jam':return 'J'+D;case 'relabel':return 'C'+D+t.c;case 'exit':return 'X'+D+t.c;case 'spawn':return 'I'+D;}return '..';}
 function parseMap(str){const rows=str.trim().split('/').map(r=>r.trim().split(/\s+/));const H=rows.length,W=Math.max(...rows.map(r=>r.length));
   return {W,H,tiles:rows.map(r=>Array.from({length:W},(_,x)=>parseTile(r[x])))};}
@@ -50,6 +55,10 @@ function createWorld(str,opt){opt=opt||{};const rng=opt.rng||Math.random;const {
   w.bestSide=(b,x,y)=>{const t=T(x,y);if(!hopable(t)||laneC[y][x]===b.dest)return -1;let best=-1,bd=w.dist(b.dest,x,y);
     for(const h of [(t.d+1)%4,(t.d+3)%4]){const nx=x+DX[h],ny=y+DY[h];if(!hopable(T(nx,ny)))continue;const v=w.dist(b.dest,nx,ny);if(v<bd){bd=v;best=h;}}return best;};
   // 색 없이: 넘어갈 수 있는 옆 방향 중 아무거나(-1 = 못 감)
+  w.isSwitch=(x,y)=>{const t=T(x,y);return !!(t&&t.sw);};
+  // 분기 칸 바로 앞이나 뒤(같은 레일)인가: 미끼 자리
+  w.nearSwitch=(x,y)=>{const t=T(x,y);if(!t||t.sw)return false;return w.isSwitch(x+DX[t.d],y+DY[t.d])||w.isSwitch(x-DX[t.d],y-DY[t.d]);};
+  w.hasSwitches=cells.some(([x,y])=>tiles[y][x].sw);
   w.randSide=b=>{const t=T(b.cx,b.cy);if(!hopable(t))return -1;const o=[(t.d+1)%4,(t.d+3)%4].filter(h=>hopable(T(b.cx+DX[h],b.cy+DY[h])));return o.length?o[(rng()*o.length)|0]:-1;};
   w.turnDir=(t,x,y)=>Math.floor((w.t+(x+y)*.37)/t.per)%2?t.s:t.d;
   w.jamOpen=(x,y)=>((w.t+x*.7+y*.3)%5)<2.2;
@@ -75,18 +84,23 @@ function createWorld(str,opt){opt=opt||{};const rng=opt.rng||Math.random;const {
     if(s==='red')for(const b of w.boxes){if(b.gone||b.pending)continue;if(w.midMove(b)||(b.kind!=='npc'&&b.mul!==1))w.events.push({type:'frozen',b,x:w.pos(b)[0],y:w.pos(b)[1]});}
     w.events.push({type:'light',s});};
   // 사람 상자의 옆 칸 갈아타기
-  w.thud=function(b,move){const [x,y]=w.pos(b);const off=w.light==='red';if(move)b.lastWin=w.win;w.events.push({type:'thud',b,x,y,off});return off;};
+  w.thud=function(b,move,sw){const [x,y]=w.pos(b);const off=w.light==='red';if(move)b.lastWin=w.win;w.events.push({type:'thud',b,x,y,off,sw:!!sw});return off;}; // sw: 분기 칸에서 넘어갔나
   w.hop=function(b,h){if(b.pending||b.gone||b.slide&&b.slide.t<1)return null;if(h%2===b.d%2)return null;
     const here=tiles[b.cy][b.cx];if(!hopable(here))return null;
     const [px,py]=w.pos(b);const nx=b.cx+DX[h],ny=b.cy+DY[h];const nt=T(nx,ny);if(!hopable(nt))return null;
     const dir2=nt.d;let cx=nx,cy=ny,s=b.s,d=dir2;
     if(dir2===b.d){}else if(dir2===(b.d+2)%4){const fx=nx+DX[b.d],fy=ny+DY[b.d];if(T(fx,fy)){cx=fx;cy=fy;s=1-b.s;}else s=0;}else s=0;
+    const fromSw=w.isSwitch(b.cx,b.cy);
     b.cx=cx;b.cy=cy;b.s=s;b.d=d;const nb=[cx+DX[d]*s,cy+DY[d]*s];b.slide={ox:px-nb[0],oy:py-nb[1],t:0};
-    return {off:w.thud(b,true)};};
+    return {off:w.thud(b,true,fromSw)};};
   w.step=function(dt){w.t+=dt;w.lightT+=dt;
     // NPC: 초록일 때 흩어져서 한 줄, 노랑일 땐 아주 가끔 늦게(=걸릴 수 있음)
     const rate=(w.light==='green'?(colorsOn?1.3:WANDER):w.light==='yellow'?w.diff.late:0);
-    if(rate>0)for(const b of w.boxes){if(b.kind!=='npc'||b.gone||b.pending||w.midMove(b)||b.lastWin===w.win)continue;if(rng()<dt*rate){const h=colorsOn?w.bestSide(b,b.cx,b.cy):w.randSide(b);if(h>=0)w.hop(b,h);}}
+    // 분기 칸 맵: 일반 상자는 분기 칸(과 미끼 자리)에 들어선 직후 한 번만 정한다. 노랑이면 아주 가끔 늦게(late).
+    if(w.hasSwitches)for(const b of w.boxes){if(b.kind!=='npc'||b.gone||b.pending||w.midMove(b)||b.s>.5)continue;const key=b.cx+','+b.cy;if(b.swKey===key)continue;
+      const sw=w.isSwitch(b.cx,b.cy),bait=!sw&&w.nearSwitch(b.cx,b.cy);if(!sw&&!bait)continue;b.swKey=key;
+      const ok=w.light==='green'||(w.light==='yellow'&&rng()<w.diff.late);if(ok&&rng()<(sw?SW_P:SW_BAIT)){const h=w.randSide(b);if(h>=0)w.hop(b,h);}}
+    if(rate>0&&!w.hasSwitches)for(const b of w.boxes){if(b.kind!=='npc'||b.gone||b.pending||w.midMove(b)||b.lastWin===w.win)continue;if(rng()<dt*rate){const h=colorsOn?w.bestSide(b,b.cx,b.cy):w.randSide(b);if(h>=0)w.hop(b,h);}}
     // 차간 거리
     const P=w.boxes.map(b=>(b.gone||b.pending)?null:w.pos(b));
     w.boxes.forEach((b,i)=>{b.follow=1;if(!P[i])return;const hx=DX[b.d],hy=DY[b.d];
@@ -123,4 +137,4 @@ const _cal={};function calibrate(str,opt){opt=opt||{};const key=str+'|'+(opt.col
   for(let r=0;r<7;r++){const w=createWorld(str,{rng,colors:opt.colors});const sig=signalAI(DIFF.normal,rng);const n=w.tiles.flat().filter(Boolean).length;for(let i=0;i<Math.round(n*.42);i++)w.add('npc');const p=w.add('player');if(!p)break;
     let got=0,s=nextStamp(w,p,rng),t=0;while(t<300&&got<STAMPS&&s){sig(w,1/20);if(w.light==='green'&&w.lightT>.25&&!w.midMove(p)){const h=stampDir(w,p,s);if(h>=0)w.hop(p,h);}w.step(1/20);w.events=[];t+=1/20;if(onStamp(w,p,s)){got++;s=nextStamp(w,p,rng);}}ts.push(t);}
   ts.sort((a,b)=>a-b);return _cal[key]=ts[(ts.length/2)|0]||90;}
-if(typeof module!=='undefined')module.exports={onStamp,STAMPS,nextStamp,stampDir,signalAI,calibrate,createWorld,MAPS,parseMap,mapToStr,parseTile,tileToken,DIFF,DIRS,DX,DY,CYCLE,ON};
+if(typeof module!=='undefined')module.exports={SW_P,SW_BAIT,onStamp,STAMPS,nextStamp,stampDir,signalAI,calibrate,createWorld,MAPS,parseMap,mapToStr,parseTile,tileToken,DIFF,DIRS,DX,DY,CYCLE,ON};
