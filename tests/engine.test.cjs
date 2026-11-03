@@ -6,17 +6,18 @@ const ok = (cond, msg) => { console.log((cond ? 'ok   ' : 'FAIL ') + msg); if (!
 
 function fill(w) { const n = w.tiles.flat().filter(Boolean).length; for (let i = 0; i < Math.round(n * .42); i++) w.add('npc'); }
 
-// 1. 맵마다 상자가 막히지 않고 계속 흐르고 출고된다
-for (const k of Object.keys(E.MAPS)) {
-  const w = E.createWorld(E.MAPS[k].str); fill(w);
+// 1. 맵마다 상자가 막히지 않고 계속 흐르고 출고된다(색 켬·끔 둘 다)
+for (const k of Object.keys(E.MAPS)) for (const colors of [true, false]) {
+  const w = E.createWorld(E.MAPS[k].str, { colors }); fill(w);
   const sig = E.signalAI(E.DIFF.normal);
   let del = 0;
   for (let i = 0; i < 120 * 30; i++) { sig(w, 1 / 30); w.step(1 / 30); del += w.events.filter(e => e.type === 'deliver').length; w.events = []; }
   const p0 = w.boxes.map(b => w.pos(b));
   for (let i = 0; i < 300; i++) { sig(w, 1 / 30); w.step(1 / 30); w.events = []; }
   const moved = w.boxes.filter((b, i) => { const p = w.pos(b); return Math.hypot(p[0] - p0[i][0], p[1] - p0[i][1]) > .5; }).length;
-  ok(del > 50, `${k}: 120초 동안 출고 ${del}회 (50회 넘어야 함)`);
-  ok(moved >= w.boxes.length * .8, `${k}: 10초 동안 움직인 상자 ${moved}/${w.boxes.length}`);
+  const tag = `${k}${colors ? '' : '(색 끔)'}`;
+  ok(del > 50, `${tag}: 120초 동안 출고 ${del}회 (50회 넘어야 함)`);
+  ok(moved >= w.boxes.length * .8, `${tag}: 10초 동안 움직인 상자 ${moved}/${w.boxes.length}`);
 }
 
 // 2. 맵 문자열을 읽고 다시 쓰면 같은 맵이 된다(공유 문자열)
@@ -39,9 +40,29 @@ for (const k of Object.keys(E.MAPS)) {
 }
 
 // 4. 제한 시간 보정이 말이 되는 범위다(도장 4개, 모범 플레이 기준 초)
-for (const k of Object.keys(E.MAPS)) {
-  const c = E.calibrate(E.MAPS[k].str);
-  ok(c > 8 && c < 200, `${k}: 보정값 ${c.toFixed(1)}초`);
+for (const k of Object.keys(E.MAPS)) for (const colors of [true, false]) {
+  const c = E.calibrate(E.MAPS[k].str, { colors });
+  ok(c > 8 && c < 200, `${k}${colors ? '' : '(색 끔)'}: 보정값 ${c.toFixed(1)}초`);
+}
+
+// 6. 색 끔: 일반 상자는 초록 때 옆으로 옮기고(한 초록에 한 번까지), 빨강 순간 걸리는 일반 상자(미끼)가 생긴다
+{
+  let hops = 0, greens = 0, frozen = 0, reds = 0, twice = 0;
+  const w = E.createWorld(E.MAPS.plain.str, { colors: false }); fill(w);
+  const sig = E.signalAI(E.DIFF.normal); const seen = new Map();
+  for (let i = 0; i < 30 * 120; i++) {
+    sig(w, 1 / 30); w.step(1 / 30);
+    for (const e of w.events) {
+      if (e.type === 'light' && e.s === 'green') { greens++; seen.clear(); }
+      if (e.type === 'light' && e.s === 'red') reds++;
+      if (e.type === 'frozen') frozen++;
+      if (e.type === 'thud' && w.light === 'green') { hops++; if (seen.has(e.b)) twice++; seen.set(e.b, 1); }
+    }
+    w.events = [];
+  }
+  ok(hops / greens > 3, `색 끔: 초록 한 번에 옮긴 일반 상자 ${(hops / greens).toFixed(1)}개`);
+  ok(twice === 0, '색 끔: 한 초록에 같은 상자가 두 번 옮기지 않음');
+  ok(frozen / reds > .1, `색 끔: 빨강 한 번에 걸린 상자 ${(frozen / reds).toFixed(2)}개`);
 }
 
 // 5. 다음 도장은 지금 레일과 다른 레일에 뜬다

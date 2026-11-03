@@ -1,10 +1,18 @@
 // 완성본(dist/index.html)을 가짜 화면(3D와 DOM을 흉내 낸 빈 껍데기)에서 돌려,
-// 메뉴 → 맵 만들기 → 기록 → 숨는 쪽 한 판 → 찾는 쪽 한 판이 오류 없이 도는지 본다.
-// 그림이 제대로 나오는지는 못 본다. 실행: node src/build.mjs && node tests/smoke.cjs
+// 메뉴 → (맵 만들기 → 기록) → 숨는 쪽 한 판 → 찾는 쪽 한 판이 오류 없이 도는지 본다.
+// 기본은 지금 판(덜어낸 스위치 그대로). --full을 붙이면 FEAT 스위치를 전부 켠 판으로 돈다.
+// 그림이 제대로 나오는지, 손맛은 못 본다. 실행: node src/build.mjs && node tests/smoke.cjs [--full]
 const fs = require('fs');
 const path = require('path');
-const file = process.argv[2] || path.join(__dirname, '../dist/index.html');
-const html = fs.readFileSync(file, 'utf8');
+const full = process.argv.includes('--full');
+const file = process.argv.slice(2).find(a => !a.startsWith('--')) || path.join(__dirname, '../dist/index.html');
+let html = fs.readFileSync(file, 'utf8');
+if (full) {
+  const m = html.match(/const FEAT=\{[^}]*\}/);
+  if (!m) { console.log('FAIL FEAT 스위치를 못 찾음'); process.exit(1); }
+  html = html.replace(m[0], m[0].replace(/false/g, 'true'));
+}
+console.log(full ? '[스위치 다 켠 판]' : '[지금 판]');
 const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1]);
 
 function P(name = 'p') {
@@ -15,7 +23,7 @@ function P(name = 'p') {
   });
 }
 const els = {};
-const el = id => els[id] || (els[id] = { id, hidden: false, innerHTML: '', textContent: '', style: {}, value: 'basic', classList: { toggle() {} }, addEventListener() {}, querySelector: () => el('q' + Math.random()), querySelectorAll: () => [], setPointerCapture() {}, getBoundingClientRect: () => ({ left: 0, top: 0, width: 960, height: 540 }), focus() {}, select() {}, dataset: {} });
+const el = id => els[id] || (els[id] = { id, hidden: false, innerHTML: '', textContent: '', style: {}, value: 'basic', classList: { toggle() {} }, addEventListener(t, f) { ((this.h = this.h || {})[t] = this.h[t] || []).push(f); }, fire(t, e) { (this.h && this.h[t] || []).forEach(f => f(e)); }, querySelector: () => el('q' + Math.random()), querySelectorAll: () => [], setPointerCapture() {}, getBoundingClientRect: () => ({ left: 0, top: 0, width: 960, height: 540 }), focus() {}, select() {}, dataset: {} });
 global.document = { createElement: () => ({ width: 0, height: 0, getContext: () => P('ctx') }), getElementById: el, querySelectorAll: () => [], activeElement: null };
 global.window = global; global.addEventListener = () => {}; global.devicePixelRatio = 1;
 global.localStorage = { getItem: () => null, setItem() {}, removeItem() {} };
@@ -33,11 +41,30 @@ try {
   run(5, 16);
   ok(els.panelBox.innerHTML.includes('택배 숨바꼭질'), '메뉴가 뜬다');
 
-  els.bEdit.onclick(); run(10); els.editDone.onclick();
-  ok(els.panelBox.innerHTML.includes('공유 문자열'), '맵 만들기 → 공유 문자열 화면');
-  els.backEd.onclick(); run(5); els.editDone.onclick(); els.edMenu.onclick();
+  if (full) {
+    els.bEdit.onclick(); run(10); els.editDone.onclick();
+    ok(els.panelBox.innerHTML.includes('공유 문자열'), '맵 만들기 → 공유 문자열 화면');
+    els.backEd.onclick(); run(5); els.editDone.onclick(); els.edMenu.onclick();
+    els.bRec.onclick(); ok(els.panelBox.innerHTML.includes('기록'), '기록 화면'); els.recBack.onclick();
+  } else {
+    ok(!els.panelBox.innerHTML.includes('bEdit') && !els.panelBox.innerHTML.includes('bRec') && !els.panelBox.innerHTML.includes('mapSel'), '덜어낸 판: 맵 만들기·기록·맵 선택이 메뉴에 없음');
+  }
 
-  els.bRec.onclick(); ok(els.panelBox.innerHTML.includes('기록'), '기록 화면'); els.recBack.onclick();
+  // 스와이프 한 번 = 옆 레일로 한 번 (터치 조작)
+  els.bHide.onclick(); run(20);
+  {
+    const B = global.__box, p = B.player, cy0 = p.cy, up = cy0 > 1;
+    const c = els.c, e0 = { pointerId: 7, pointerType: 'touch', button: 0, clientX: 480, clientY: 270 };
+    c.fire('pointerdown', e0);
+    c.fire('pointermove', { ...e0, clientY: 270 + (up ? -10 : 10) });
+    const before = p.cy;
+    c.fire('pointermove', { ...e0, clientY: 270 + (up ? -40 : 40) });
+    const after = p.cy;
+    c.fire('pointermove', { ...e0, clientY: 270 + (up ? -90 : 90) });
+    c.fire('pointerup', { ...e0, clientY: 270 + (up ? -90 : 90) });
+    ok(before === cy0 && after === cy0 + (up ? -1 : 1) && p.cy === after, `스와이프: 10px는 무시, 40px에 한 줄 이동, 한 번 밀기에 한 번만 (${cy0}→${p.cy})`);
+  }
+  els.pauseBtn.onclick(); els.quit.onclick();
 
   els.bHide.onclick(); run(300); els.fakeBtn.onclick && els.fakeBtn.onclick(); run(2400);
   ok(/도장/.test(els.goalL.innerHTML) || /통과|실패/.test(els.panelBox.innerHTML), '숨는 쪽 한 판(80초)이 끝까지 돈다');

@@ -4,11 +4,13 @@
 const DIRS='>v<^',DX=[1,0,-1,0],DY=[0,1,0,-1];
 const SPD={n:1,f:1.55,s:.6},BASE=1.25; // 칸/초
 const CYCLE=4,ON=1.2,WARN=1;
+const WANDER=.45; // 색 끔일 때 일반 상자가 초록에 옆으로 옮기는 빈도(초당, 한 초록에 한 번까지)
 const DIFF={easy:{name:'쉬움',yellow:.65,late:.35,green:[1.6,4.2],red:[1.4,2.4],fake:.12,aim:1.0,slack:1.6,k:1.4},normal:{name:'보통',yellow:.45,late:.22,green:[1.0,3.8],red:[1.6,2.8],fake:.2,aim:.75,slack:1.25,k:1},hard:{name:'어려움',yellow:.3,late:.12,green:[.6,3.4],red:[1.8,3.2],fake:.3,aim:.55,slack:1.0,k:.7}};
 function laneMap(rows,bars){const W=14,g=[Array(W).fill('..')];
   rows.forEach(r=>{const t=Array(W).fill(r.sp+r.d);const right=r.d==='>';t[right?0:W-1]='I'+r.d;t[right?W-1:0]='X'+r.d+r.c;bars.forEach(c=>t[c]='S'+r.d);Object.entries(r.ex||{}).forEach(([k,v])=>t[+k]=v);g.push(t);});
   g.push(Array(W).fill('..'));return g.map(r=>r.join(' ')).join('/');}
 const MAPS={
+  plain:{name:'기본',str:laneMap([{d:'>',sp:'n',c:0},{d:'<',sp:'n',c:1},{d:'>',sp:'n',c:2},{d:'>',sp:'n',c:3}],[])},
   basic:{name:'기본(섞임)',str:laneMap([{d:'>',sp:'n',c:0},{d:'<',sp:'f',c:1},{d:'>',sp:'s',c:2,ex:{6:'J>'}},{d:'>',sp:'n',c:3}],[])},
   five:{name:'다섯 줄',str:laneMap([{d:'>',sp:'n',c:0},{d:'>',sp:'f',c:1,ex:{5:'C>3'}},{d:'<',sp:'n',c:2},{d:'>',sp:'s',c:3,ex:{8:'J>'}},{d:'<',sp:'n',c:4,ex:{10:'C<0'}}],[])}
 };
@@ -28,7 +30,9 @@ function createWorld(str,opt){opt=opt||{};const rng=opt.rng||Math.random;const {
   const cells=[];for(let y=0;y<H;y++)for(let x=0;x<W;x++)if(tiles[y][x])cells.push([x,y]);
   const colors=[...new Set(cells.map(([x,y])=>tiles[y][x]).filter(t=>t.t==='exit').map(t=>t.c))];if(!colors.length)colors.push(0);
   const spawns=cells.filter(([x,y])=>tiles[y][x].t==='spawn');
-  const w={W,H,tiles,colors,diff,boxes:[],t:0,light:'green',lightT:0,sortOn:true,win:0,events:[]};
+  // colorsOn=false(v12 기본): 일반 상자는 초록 때 무작위로 옆 레일, 출고구는 색 상관없이 받는다
+  const colorsOn=opt.colors!==false;
+  const w={W,H,tiles,colors,diff,colorsOn,boxes:[],t:0,light:'green',lightT:0,sortOn:true,win:0,events:[]};
   const T=(x,y)=>(x>=0&&y>=0&&x<W&&y<H)?tiles[y][x]:null;w.T=T;
   const wrap=(x,y)=>[(x+W)%W,(y+H)%H];
   const hopable=t=>t&&t.t!=='turn'&&t.t!=='exit';
@@ -45,6 +49,8 @@ function createWorld(str,opt){opt=opt||{};const rng=opt.rng||Math.random;const {
   // 노란 막대에서 이 상자가 가야 할 옆 방향(-1 = 안 감)
   w.bestSide=(b,x,y)=>{const t=T(x,y);if(!hopable(t)||laneC[y][x]===b.dest)return -1;let best=-1,bd=w.dist(b.dest,x,y);
     for(const h of [(t.d+1)%4,(t.d+3)%4]){const nx=x+DX[h],ny=y+DY[h];if(!hopable(T(nx,ny)))continue;const v=w.dist(b.dest,nx,ny);if(v<bd){bd=v;best=h;}}return best;};
+  // 색 없이: 넘어갈 수 있는 옆 방향 중 아무거나(-1 = 못 감)
+  w.randSide=b=>{const t=T(b.cx,b.cy);if(!hopable(t))return -1;const o=[(t.d+1)%4,(t.d+3)%4].filter(h=>hopable(T(b.cx+DX[h],b.cy+DY[h])));return o.length?o[(rng()*o.length)|0]:-1;};
   w.turnDir=(t,x,y)=>Math.floor((w.t+(x+y)*.37)/t.per)%2?t.s:t.d;
   w.jamOpen=(x,y)=>((w.t+x*.7+y*.3)%5)<2.2;
   const human=b=>b.kind!=='npc';
@@ -59,7 +65,7 @@ function createWorld(str,opt){opt=opt||{};const rng=opt.rng||Math.random;const {
   // 칸 중앙 도착: 다음 방향을 정한다
   function arrive(b){const t=tiles[b.cy][b.cx];
     if(t.t==='relabel'){b.dest=t.c;}
-    if(t.t==='exit'&&t.c===b.dest){b.deliv++;w.events.push({type:'deliver',b});
+    if(t.t==='exit'&&(t.c===b.dest||!colorsOn)){b.deliv++;w.events.push({type:'deliver',b});
       if(b.kind==='npc')b.dest=colors[(rng()*colors.length)|0];else{const o=colors.filter(c=>c!==b.dest);if(o.length)b.dest=o[(rng()*o.length)|0];}
       respawn(b);return;}
     if(t.t==='turn'){b.d=w.turnDir(t,b.cx,b.cy);return;}
@@ -79,8 +85,8 @@ function createWorld(str,opt){opt=opt||{};const rng=opt.rng||Math.random;const {
     return {off:w.thud(b,true)};};
   w.step=function(dt){w.t+=dt;w.lightT+=dt;
     // NPC: 초록일 때 흩어져서 한 줄, 노랑일 땐 아주 가끔 늦게(=걸릴 수 있음)
-    const rate=w.light==='green'?1.3:w.light==='yellow'?w.diff.late:0;
-    if(rate>0)for(const b of w.boxes){if(b.kind!=='npc'||b.gone||b.pending||w.midMove(b)||b.lastWin===w.win)continue;if(rng()<dt*rate){const h=w.bestSide(b,b.cx,b.cy);if(h>=0)w.hop(b,h);}}
+    const rate=(w.light==='green'?(colorsOn?1.3:WANDER):w.light==='yellow'?w.diff.late:0);
+    if(rate>0)for(const b of w.boxes){if(b.kind!=='npc'||b.gone||b.pending||w.midMove(b)||b.lastWin===w.win)continue;if(rng()<dt*rate){const h=colorsOn?w.bestSide(b,b.cx,b.cy):w.randSide(b);if(h>=0)w.hop(b,h);}}
     // 차간 거리
     const P=w.boxes.map(b=>(b.gone||b.pending)?null:w.pos(b));
     w.boxes.forEach((b,i)=>{b.follow=1;if(!P[i])return;const hx=DX[b.d],hy=DY[b.d];
@@ -110,8 +116,8 @@ function nextStamp(w,b,rng){rng=rng||Math.random;const c=[];for(let y=0;y<w.H;y+
 function stampDir(w,b,s){if(!s||s[1]===b.cy)return -1;const h=s[1]>b.cy?1:3;const nt=w.T(b.cx+DX[h],b.cy+DY[h]);return (nt&&nt.t!=='turn'&&nt.t!=='exit'&&h%2!==b.d%2)?h:-1;}
 const STAMPS=4;
 // 맵마다 "초록일 때만 움직이는" 플레이어가 도장 4개를 모으는 데 걸리는 시간(초, 중간값)
-const _cal={};function calibrate(str){if(_cal[str])return _cal[str];let seed=11;const rng=()=>{seed=(seed*16807)%2147483647;return (seed-1)/2147483646;};const ts=[];
-  for(let r=0;r<7;r++){const w=createWorld(str,{rng});const sig=signalAI(DIFF.normal,rng);const n=w.tiles.flat().filter(Boolean).length;for(let i=0;i<Math.round(n*.42);i++)w.add('npc');const p=w.add('player');if(!p)break;
+const _cal={};function calibrate(str,opt){opt=opt||{};const key=str+'|'+(opt.colors!==false);if(_cal[key])return _cal[key];let seed=11;const rng=()=>{seed=(seed*16807)%2147483647;return (seed-1)/2147483646;};const ts=[];
+  for(let r=0;r<7;r++){const w=createWorld(str,{rng,colors:opt.colors});const sig=signalAI(DIFF.normal,rng);const n=w.tiles.flat().filter(Boolean).length;for(let i=0;i<Math.round(n*.42);i++)w.add('npc');const p=w.add('player');if(!p)break;
     let got=0,s=nextStamp(w,p,rng),t=0;while(t<300&&got<STAMPS&&s){sig(w,1/20);if(w.light==='green'&&w.lightT>.25&&!w.midMove(p)){const h=stampDir(w,p,s);if(h>=0)w.hop(p,h);}w.step(1/20);w.events=[];t+=1/20;if(p.cx===s[0]&&p.cy===s[1]){got++;s=nextStamp(w,p,rng);}}ts.push(t);}
-  ts.sort((a,b)=>a-b);return _cal[str]=ts[(ts.length/2)|0]||90;}
+  ts.sort((a,b)=>a-b);return _cal[key]=ts[(ts.length/2)|0]||90;}
 if(typeof module!=='undefined')module.exports={STAMPS,nextStamp,stampDir,signalAI,calibrate,createWorld,MAPS,parseMap,mapToStr,parseTile,tileToken,DIFF,DIRS,DX,DY,CYCLE,ON};
