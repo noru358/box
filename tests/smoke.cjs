@@ -51,8 +51,10 @@ try {
     ok(!els.panelBox.innerHTML.includes('bEdit') && !els.panelBox.innerHTML.includes('bRec') && !els.panelBox.innerHTML.includes('mapSel'), '덜어낸 판: 맵 만들기·기록·맵 선택이 메뉴에 없음');
   }
 
-  // 스와이프 한 번 = 옆 레일로 한 번 (터치 조작)
-  els.bHide.onclick(); run(20);
+  // 상자가 옮길 수 있는 상태가 될 때까지(넘어가는 중 아님, 양 끝 출고·입고 칸 아님) 한 프레임씩
+  const ready = () => { for (let i = 0; i < 600; i++) { const B = global.__box, p = B.player; if (B.over) return false; if (p && !p.pending && !B.world.midMove(p) && p.cx >= 1 && p.cx <= B.world.W - 3) return true; run(1); } return false; };
+  // 스와이프 한 번 = 옆 레일로 한 번 (터치 조작). 찍혀서 판이 끝나면 다시 시작
+  els.bHide.onclick(); run(20); for (let k = 0; k < 5 && !ready(); k++) { if (global.__box.over) els.again.onclick(); run(5); }
   {
     const B = global.__box, p = B.player, cy0 = p.cy, up = cy0 > 1;
     const c = global.document, e0 = { pointerId: 7, pointerType: 'touch', button: 0, clientX: 480, clientY: 270 };
@@ -66,18 +68,20 @@ try {
     ok(before === cy0 && after === cy0 + (up ? -1 : 1) && p.cy === after, `스와이프: 10px는 무시, 40px에 한 줄 이동, 한 번 밀기에 한 번만 (${cy0}→${p.cy})`);
   }
   // 톡 누르기: 가짜 화면에선 내 상자가 화면 한가운데(y=270)로 잡히므로, 그보다 위를 누르면 위 레일
-  run(20);
+  // 빨간불이면 미끄러지던 상자가 멈춰 있으므로, 다 넘어갈 때까지 기다린다
+  for (let k = 0; k < 5 && !ready(); k++) { if (global.__box.over) els.again.onclick(); run(5); }
   {
     const B = global.__box, p = B.player, cy0 = p.cy, up = cy0 > 1, c = global.document;
     const e1 = { pointerId: 8, pointerType: 'touch', button: 0, clientX: 300, clientY: up ? 120 : 420 };
     c.fire('pointerdown', e1); c.fire('pointerup', e1);
     ok(p.cy === cy0 + (up ? -1 : 1), `톡 누르기: 내 상자보다 ${up ? '위' : '아래'}를 누르면 그쪽 레일로 (${cy0}→${p.cy})`);
-    run(20);
+    ready();
     const cy1 = p.cy, e2 = { pointerId: 9, pointerType: 'mouse', button: 0, clientX: 300, clientY: up ? 420 : 120 };
     c.fire('pointerdown', e2); c.fire('pointerup', e2);
     ok(p.cy === cy1, '마우스 클릭은 레일을 옮기지 않음(PC는 키보드)');
   }
-  els.pauseBtn.onclick(); els.quit.onclick();
+  // 기다리는 사이 직원에게 찍혀 판이 끝났을 수도 있다
+  if (!global.__box.over) { els.pauseBtn.onclick(); els.quit.onclick(); } else els.toMenu.onclick();
 
   els.bHide.onclick(); run(300); els.fakeBtn.onclick && els.fakeBtn.onclick(); run(2400);
   ok(/도장/.test(els.goalL.innerHTML) || /통과|실패/.test(els.panelBox.innerHTML), '숨는 쪽 한 판(80초)이 끝까지 돈다');

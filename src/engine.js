@@ -115,9 +115,12 @@ function nextStamp(w,b,rng){rng=rng||Math.random;const c=[];for(let y=0;y<w.H;y+
 // 도장 칸 쪽 레일로 옮겨야 하면 그 방향(-1=이미 그 줄이거나 못 감)
 function stampDir(w,b,s){if(!s||s[1]===b.cy)return -1;const h=s[1]>b.cy?1:3;const nt=w.T(b.cx+DX[h],b.cy+DY[h]);return (nt&&nt.t!=='turn'&&nt.t!=='exit'&&h%2!==b.d%2)?h:-1;}
 const STAMPS=4;
+// 도장을 찍었나: 칸 번호가 아니라 화면에 보이는 위치로 본다. 옆 레일로 넘어가면 칸 번호는 즉시 바뀌지만 화면에선 0.38초 미끄러지므로,
+// 칸 번호로 보면 화면엔 아직 아래 레일에 있는데 도장이 찍히는 일이 생긴다(v12 사용자 지적).
+function onStamp(w,b,s){if(!s)return false;const [x,y]=w.pos(b);return Math.abs(x-s[0])<.5&&Math.abs(y-s[1])<.3;}
 // 맵마다 "초록일 때만 움직이는" 플레이어가 도장 4개를 모으는 데 걸리는 시간(초, 중간값)
 const _cal={};function calibrate(str,opt){opt=opt||{};const key=str+'|'+(opt.colors!==false);if(_cal[key])return _cal[key];let seed=11;const rng=()=>{seed=(seed*16807)%2147483647;return (seed-1)/2147483646;};const ts=[];
   for(let r=0;r<7;r++){const w=createWorld(str,{rng,colors:opt.colors});const sig=signalAI(DIFF.normal,rng);const n=w.tiles.flat().filter(Boolean).length;for(let i=0;i<Math.round(n*.42);i++)w.add('npc');const p=w.add('player');if(!p)break;
-    let got=0,s=nextStamp(w,p,rng),t=0;while(t<300&&got<STAMPS&&s){sig(w,1/20);if(w.light==='green'&&w.lightT>.25&&!w.midMove(p)){const h=stampDir(w,p,s);if(h>=0)w.hop(p,h);}w.step(1/20);w.events=[];t+=1/20;if(p.cx===s[0]&&p.cy===s[1]){got++;s=nextStamp(w,p,rng);}}ts.push(t);}
+    let got=0,s=nextStamp(w,p,rng),t=0;while(t<300&&got<STAMPS&&s){sig(w,1/20);if(w.light==='green'&&w.lightT>.25&&!w.midMove(p)){const h=stampDir(w,p,s);if(h>=0)w.hop(p,h);}w.step(1/20);w.events=[];t+=1/20;if(onStamp(w,p,s)){got++;s=nextStamp(w,p,rng);}}ts.push(t);}
   ts.sort((a,b)=>a-b);return _cal[key]=ts[(ts.length/2)|0]||90;}
-if(typeof module!=='undefined')module.exports={STAMPS,nextStamp,stampDir,signalAI,calibrate,createWorld,MAPS,parseMap,mapToStr,parseTile,tileToken,DIFF,DIRS,DX,DY,CYCLE,ON};
+if(typeof module!=='undefined')module.exports={onStamp,STAMPS,nextStamp,stampDir,signalAI,calibrate,createWorld,MAPS,parseMap,mapToStr,parseTile,tileToken,DIFF,DIRS,DX,DY,CYCLE,ON};
