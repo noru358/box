@@ -4,7 +4,7 @@
 
 ## 이 브랜치: v12-stop (시험 갈래, 2026-11-04)
 - `main`의 v12에서 갈라졌다. 신호를 "벨트 정지 반응 시험"으로 바꿈(`FEAT.stop`, 엔진 `beltStop` 옵션). 규칙은 `rules.md` 맨 위 상자.
-- 시험 링크는 `main`과 별도 아티팩트: https://claude.ai/artifact/ 아래 "택배 숨바꼭질 정지 시험"(README에 링크). 사람 기록은 이 링크 db의 `plays`(v:2, 창마다 go:{p,pre,s} 추가)와 이 브라우저 `box-human2`.
+- 시험 링크(`main`과 별도 아티팩트 "택배 숨바꼭질 정지 시험"): https://claude.ai/artifact/2veiV9GwGgzi8DjVwQRtTS — 빌드한 `dist/index.html`의 제목만 바꿔 올린다. 사람 기록은 이 링크 db의 `plays`(v:2, 창마다 go:{p,pre,s} 추가)와 이 브라우저 `box-human2`.
 - 사용자 판정 기다림: 숨는 쪽은 멈춤 반응이 손에 땀 나는지·억울한지, 찾는 쪽은 사람이 눈에 보이는지. 좋으면 `main`에 합치고, 아니면 이 브랜치는 기록으로 둔다.
 
 ## 지금 (2026-11-03)
