@@ -82,9 +82,21 @@ try {
   els.bHide.onclick(); run(300); els.fakeBtn.onclick && els.fakeBtn.onclick(); run(2400);
   ok(/도장/.test(els.goalL.innerHTML) || /통과|실패/.test(els.panelBox.innerHTML), '숨는 쪽 한 판(80초)이 끝까지 돈다');
 
+  {
+    const H = global.__box.human;
+    ok(H.plays >= 1 && H.windows >= 1, `사람 기록: 숨는 쪽 한 판이 끝나면 기록이 남는다 (${H.plays}판, 초록 ${H.windows}번)`);
+  }
   if (els.swap && els.swap.onclick) els.swap.onclick(); else els.bSeek.onclick();
+  {
+    const B = global.__box, n = B.world.boxes.filter(b => !b.gone).length;
+    ok(n <= 17, `찾는 쪽 상자 수 ${n}개 (17개 이하)`);
+  }
   els.lookBtn.onclick && els.lookBtn.onclick(); run(2400);
   ok(/찾음/.test(els.goalL.innerHTML) || /통과|실패/.test(els.panelBox.innerHTML), '찾는 쪽 한 판(80초)이 끝까지 돈다');
+  {
+    const bots = global.__box.bots;
+    ok(bots.length === 3 && bots.every(b => Array.isArray(b.plan) && (b.src === 'synth' || b.src === 'human')), `숨은 셋이 창(초록마다 계획)으로 움직인다 (${bots.map(b => b.src).join(',')})`);
+  }
 } catch (e) {
   console.log('FAIL 오류로 멈춤: ' + e.stack.split('\n').slice(0, 4).join('\n'));
   failed++;

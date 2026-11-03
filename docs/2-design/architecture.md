@@ -28,7 +28,9 @@ CSS `@media (pointer:coarse)`일 때 위 상태줄을 줄이고, 무대를 화�
 7. 상자·신호등·도장·표시를 그리고 렌더.
 
 ## 저장
-브라우저 localStorage에 세 가지: `box-custom`(내 맵 문자열), `box-diff`(난이도), `box-records`(최근 30판). 다른 기기나 다른 사람과는 공유되지 않는다.
+브라우저 localStorage에 네 가지: `box-custom`(내 맵 문자열), `box-diff`(난이도), `box-records`(최근 30판), `box-human`(사람 기록 최근 40판). 다른 기기나 다른 사람과는 공유되지 않는다.
+
+사람 기록은 아티팩트로 열었을 때 공유 db에도 저장된다. 컬렉션 `plays`, 한 판에 문서 하나: `{v:1, at:시각(ms), map, win, got:찍은 도장 수, wins:[창...]}`(창 형식은 [ai.md](ai.md)). 규칙은 링크를 열 수 있는 사람은 읽기, 참여자(interact) 이상은 쓰기. 페이지는 열릴 때 최근 80판을 읽어 숨은 AI에 쓴다. db가 없으면(파일로 열기, 로그아웃) 이 브라우저 기록만 쓴다. Claude는 `ArtifactData`로 `plays`를 읽어 분석할 수 있다.
 
 ## 테스트
 - `tests/engine.test.cjs`: 엔진만. 맵이 막히지 않고 흐르는지, 공유 문자열 왕복, 빨간불 걸림 판정, 보정값 범위, 다음 도장이 다른 레일인지.

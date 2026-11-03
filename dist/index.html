@@ -240,7 +240,9 @@ if(typeof module!=='undefined')module.exports={STAMPS,nextStamp,stampDir,signalA
 // speed: 진행/반대 방향키로 빠르게·느리게  fake: 걸린 척(C)  colors: 라벨 색·출고구 색(일반 상자가 자기 색 레일로)
 // special: 빠른·느린 벨트, 정체·재분류 칸 맵  diff: 난이도 선택  editor: 맵 만들기  records: 기록 화면  pin: 우클릭 핀
 const FEAT={speed:false,fake:false,colors:false,special:false,diff:false,editor:false,records:false,pin:false};
-const HIDE_EXTRA=7; // 숨는 쪽 제한 시간 덤(초). v12 플레이: 30초는 약간 부족, 너무 주면 널널
+const HIDE_EXTRA=7;
+const SEEK_DENSITY=.28; // 찾는 쪽 판 상자 밀도(칸 수에 곱함). 숨는 쪽은 .42(미끼 적당). 찾는 쪽은 눈으로 쫓을 수 있게 적게(약 15개)
+ // 숨는 쪽 제한 시간 덤(초). v12 플레이: 30초는 약간 부족, 너무 주면 널널
 const $=id=>document.getElementById(id);
 const cv=$('c'),stage=$('stage');
 const R=new THREE.WebGLRenderer({canvas:cv,antialias:true});R.setPixelRatio(Math.min(2,devicePixelRatio));
@@ -345,7 +347,7 @@ const keys={};
 function say(s,t=1.8){$('msg').textContent=s;$('msg').hidden=false;msgT=t;}
 function sus(b,v){if(b.fakeT>0)return;b.sus+=v;}
 function newWorld(withBoxes=true){world=createWorld(curEntry().str,wopt());buildTiles(world.tiles);clearMeshes();
-  if(withBoxes){const n=Math.round(world.tiles.flat().filter(t=>t&&t.t!=='exit').length*.42);for(let i=0;i<n;i++)world.add('npc');}}
+  if(withBoxes){const n=Math.round(world.tiles.flat().filter(t=>t&&t.t!=='exit').length*(mode==='seek'?SEEK_DENSITY:.42));for(let i=0;i<n;i++)world.add('npc');}}
 
 // ---------- 기록 ----------
 let records=[];try{records=JSON.parse(localStorage.getItem('box-records')||'[]');}catch(e){}
@@ -359,7 +361,7 @@ const coarse=()=>typeof matchMedia==='function'&&matchMedia('(pointer:coarse)').
 function goFull(){if(!coarse())return;try{const d=document.documentElement;if(!document.fullscreenElement&&d.requestFullscreen)d.requestFullscreen().then(()=>{try{screen.orientation.lock('landscape').catch(()=>{});}catch(e){}},()=>{});}catch(e){}}
 function start(m){goFull();mode=m;over=false;paused=false;newWorld();
   const D=DIFF[diffKey];const base=calibrate(curEntry().str,{colors:FEAT.colors});goal=STAMPS;time=m==='hide'?Math.max(30,Math.round(base*D.slack))+HIDE_EXTRA:Math.max(60,Math.round(base*2.6));scans=6;found=0;escaped=0;fakes=FEAT.fake?2:0;sig=signalAI(DIFF[diffKey]);world.setLight('green');t0=performance.now();clearStamps();
-  hunt={t:2,target:null,aim:0,scans:15,stun:0};bots=[];hideMarks();player=null;
+  hunt={t:2,target:null,aim:0,scans:15,stun:0};bots=[];hideMarks();player=null;rec=m==='hide'?{wins:[],cur:null,ps:world.t}:null;
   if(world.boxes.length<4){curKey='basic';menu();say('이 맵은 상자가 돌 자리가 부족해요');return;}
   if(m==='hide'){player=world.add('player')||world.boxes[0];player.kind='player';player.mul=1;player.got=0;placeStamp(player);[meArrow,worker].forEach(o=>o.visible=true);}
   else{const pers=['rush','careful','mimic'];for(let i=0;i<3;i++){const b=world.boxes[i];b.kind='bot';b.pers=pers[i];b.got=0;placeStamp(b);bots.push(b);}}
@@ -378,7 +380,7 @@ function menu(view){mode=null;over=true;paused=false;hideMarks();touchUi(null);c
   <div class="keys"><b>숨는 쪽</b> · 분홍 화살표가 나. 제한 시간 안에 금색 도장 칸 4개를 차례로 지나가면 승리(하나 찍으면 다음 도장이 다른 레일에 뜬다). 일반 상자는 도장에 관심이 없으니, 도장 레일로 옮겨 가는 순간이 위험하다. ${touch?'화면을 위·아래로 밀면':'<kbd>↑</kbd><kbd>↓</kbd>(W·S)로'} 옆 레일로 넘어간다(약 0.4초).${FEAT.speed?' 진행 방향키 = 빠르게, 반대 = 느리게.':''} 직원은 도장 근처에 상자가 있으면 더 자주 돌아본다.${FEAT.fake?' <kbd>C</kbd> 걸린 척(스캔 빗나감)':''}<br>
   <b>찾는 쪽</b> · 숨은 셋도 각자 도장 4개를 노린다. 금색 도장 근처를 지켜보다 ${touch?'<b>돌아보기</b> 버튼':'<kbd>Space</kbd>'}로 신호를 건다(노랑 → 빨강 2.5초). <b>!</b>가 뜬 상자를 ${touch?'한 번 눌러 고르고, 한 번 더 눌러':'노란 고리로 골라 클릭'} 스캔(언제든, 6번, 틀리면 −5초). 진짜 상자도 가끔 늦게 걸린다.${FEAT.pin?' 우클릭 핀':''}${touch?'':' · <kbd>Esc</kbd> 일시정지'}</div>
   ${FEAT.special||FEAT.diff?`<div class="row">${FEAT.special?`<label for="mapSel">맵</label><select id="mapSel">${opts}</select>`:''}${FEAT.diff?`<label for="diffSel">난이도</label><select id="diffSel">${dopts}</select>`:''}</div>`:''}
-  <h2>AI와 하기</h2><div class="row"><button id="bHide">숨는 쪽</button><button class="alt" id="bSeek">찾는 쪽</button></div>
+  <h2>AI와 하기</h2><div class="row"><button id="bHide">숨는 쪽</button><button class="alt" id="bSeek">찾는 쪽</button></div><p id="humanNote">${humanNote()}</p>
   <h2>친구와 하기</h2><p>다음 버전에서 붙여요. 같은 링크를 연 사람끼리 한 명은 직원, 나머지는 상자.</p>
   ${FEAT.editor||FEAT.records?`<div class="row">${FEAT.editor?'<button class="alt" id="bEdit">맵 만들기</button>':''}${FEAT.records?'<button class="alt" id="bRec">기록</button>':''}</div>`:''}`;
   if(FEAT.special)$('mapSel').onchange=e=>{curKey=e.target.value;newWorld();};if(FEAT.diff)$('diffSel').onchange=e=>{diffKey=e.target.value;try{localStorage.setItem('box-diff',diffKey);}catch(err){}};
@@ -392,6 +394,7 @@ function showRecords(){const rows=records.map(r=>`<tr><td>${r.date}</td><td>${r.
   $('recBack').onclick=()=>menu();$('recClear').onclick=()=>{records=[];try{localStorage.removeItem('box-records');}catch(e){}showRecords();};$('recBack').focus();}
 
 function end(win,text,score){if(over)return;over=true;ring.visible=laser.visible=false;$('pauseBtn').hidden=true;touchUi(null);
+  if(mode==='hide')recSave(win);
   const d=new Date();saveRecord({date:`${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`,mode,map:curEntry().name,diff:DIFF[diffKey].name,win,detail:text,score:score||0});
   $('panel').hidden=false;$('panelBox').innerHTML=`<h1>${win?'통과':'실패'}</h1><p>${text}</p><div class="row"><button id="again">한 판 더</button><button class="alt" id="swap">반대쪽으로</button><button class="alt" id="toMenu">메뉴로</button>${FEAT.records?'<button class="alt" id="toRec">기록</button>':''}</div>`;
   $('again').onclick=()=>start(mode);$('swap').onclick=()=>start(mode==='hide'?'seek':'hide');$('toMenu').onclick=()=>menu();if(FEAT.records)$('toRec').onclick=()=>menu('records');$('again').focus();}
@@ -408,7 +411,7 @@ function updHud(){$('timeL').textContent=Math.max(0,Math.ceil(time))+'초';
 
 // ---------- 숨는 쪽 조작 ----------
 const KD={KeyD:0,ArrowRight:0,KeyS:1,ArrowDown:1,KeyA:2,ArrowLeft:2,KeyW:3,ArrowUp:3};
-function playerHop(h){if(mode!=='hide'||over||paused||!player||player.hold>0)return;world.hop(player,h);}
+function playerHop(h){if(mode!=='hide'||over||paused||!player||player.hold>0)return;const sd=stampDir(world,player,player.stamp);if(world.hop(player,h))recHop(sd<0?0:(h===sd?1:-1));}
 // 키보드·스와이프·버튼이 모두 이 함수로: 옆 방향이면 레일 넘어가기, 진행/반대 방향이면 (속도 켬일 때만) 덜컹
 function hideInput(h){if(mode!=='hide'||over||paused||!player||player.pending)return;if(h%2!==player.d%2)playerHop(h);else if(FEAT.speed)world.thud(player,false);}
 function fake(){if(!FEAT.fake||mode!=='hide'||over||paused||!fakes||player.hold>0||player.pending)return;fakes--;player.hold=1.5;player.fakeT=1.5;const m=meshes.get(player);if(m)m.bump=1.5;say('덜컹… (걸린 척)');updHud();}
@@ -462,17 +465,58 @@ cv.addEventListener('contextmenu',e=>{e.preventDefault();if(!FEAT.pin||mode!=='s
 function checkSeekEnd(){if(over)return;if(found+escaped>=3)end(found===3,`찾음 ${found}, 놓침 ${escaped}. 남은 시간 ${Math.ceil(time)}초, 스캔 ${scans}번 남김.`,found*1000+Math.max(0,time)*10+scans);
   else if(scans<=0)end(false,`스캔을 다 씀. 찾음 ${found}, 놓침 ${escaped}.`,found*1000);}
 
-// 숨은 AI: 사람처럼 키를 누른다(반응 오차, 가끔 놓침, 급하면 지름)
-const PERS={rush:{react:.55,rate:1.4,red:.12},careful:{react:.35,rate:.9,red:.03},mimic:{react:.2,rate:1.1,red:.01}};
-function botThink(b,dt){if(b.found||b.gone||b.pending)return;const P=PERS[b.pers],k=DIFF[diffKey].k,panic=1-Math.max(0,time)/Math.max(1,b.T0||150);
-  if(b.mulT>0){b.mulT-=dt;if(b.mulT<=0)b.mul=1;}
-  if(world.midMove(b))return;const h=stampDir(world,b,b.stamp);
-  // 노란불을 늦게 알아챔: 노랑 초반 react초 동안은 아직 초록인 줄 앎
-  const seesGreen=world.light==='green'||(world.light==='yellow'&&world.lightT<P.react*k);
-  if(seesGreen&&world.lightT>.15){
-    if(h>=0&&Math.random()<dt*P.rate){world.hop(b,h);return;}
-  }
-  if(world.light==='red'&&h>=0&&Math.random()<dt*(P.red+panic*.15)*k){world.hop(b,h);}}
+// ---------- 사람 기록 ----------
+// 숨는 쪽 판에서 내 입력을 신호 기준으로 남긴다. 초록 한 번 = 창(window) 하나:
+// {need: 판 시작 때 도장까지 남은 줄 수(0,1,2=2 이상), g: 그 초록의 길이(초), hops: [{ph: 'g'|'y'|'r' 옮긴 순간의 신호, t: 그 신호가 켜진 뒤 초, dir: 1 도장 쪽, -1 반대쪽, 0 도장 레일 위에서}]}
+// 아무것도 안 한 초록도 창으로 남긴다(사람이 기다린 것도 패턴이다). 판이 끝나면 저장: 아티팩트에선 공유 db(plays), 아니면 이 브라우저.
+const HUMAN_VER=1,HUMAN_MIN=12; // 사람 창이 이만큼 모이면 숨은 AI가 사람 기록을 쓴다
+let rec=null,humanPlays=[],humanSrc='none',DB=null;
+const needOf=b=>b&&b.stamp?Math.min(2,Math.abs(b.stamp[1]-b.cy)):0;
+function recLight(s){if(!rec||!player)return;const now=world.t;
+  if(rec.cur&&rec.cur.ph==='g'&&s!=='green')rec.cur.g=+(now-rec.cur.t0).toFixed(2);
+  if(s==='green'){recClose();rec.cur={need:needOf(player),g:0,hops:[],t0:now,ph:'g'};}else if(rec.cur)rec.cur.ph=s;rec.ps=now;}
+function recHop(dir){if(!rec||!rec.cur)return;rec.cur.hops.push({ph:world.light==='green'?'g':world.light==='yellow'?'y':'r',t:+(world.t-rec.ps).toFixed(2),dir});}
+function recClose(){if(rec&&rec.cur){const c=rec.cur;if(!c.g)c.g=+(world.t-c.t0).toFixed(2);rec.wins.push({need:c.need,g:c.g,hops:c.hops});rec.cur=null;}}
+function recSave(win){if(!rec)return;recClose();const play={v:HUMAN_VER,at:Date.now(),map:curKey,win:!!win,got:player?player.got||0:0,wins:rec.wins.slice(0,60)};rec=null;if(!play.wins.length)return;
+  humanPlays.unshift(play);humanPlays=humanPlays.slice(0,80);
+  try{const L=JSON.parse(localStorage.getItem('box-human')||'[]');L.unshift(play);localStorage.setItem('box-human',JSON.stringify(L.slice(0,40)));}catch(e){}
+  if(DB){DB.collection('plays').add(play).catch(()=>{});}}
+const humanWins=()=>humanPlays.flatMap(p=>Array.isArray(p.wins)?p.wins:[]).filter(w=>w&&Array.isArray(w.hops));
+try{const L=JSON.parse(localStorage.getItem('box-human')||'[]');if(Array.isArray(L)&&L.length){humanPlays=L;humanSrc='local';}}catch(e){}
+// 아티팩트로 열었을 때: 공유 db에서 최근 기록을 읽는다(10초 안에 답 없으면 이 브라우저 기록만)
+(async()=>{try{const c=window.claude;if(!c||!c.use)return;const db=await c.use('db');if(!db)return;DB=db;
+  const q=await Promise.race([db.collection('plays').orderBy('at','desc').limit(80).get(),new Promise((_,r)=>setTimeout(()=>r(0),10000))]);
+  const ps=q.docs.map(d=>d.data()).filter(p=>p&&p.v===HUMAN_VER&&Array.isArray(p.wins));if(ps.length){humanPlays=ps;humanSrc='db';}if(mode===null&&$('humanNote'))$('humanNote').textContent=humanNote();}catch(e){}})();
+function humanNote(){const n=humanWins().length;return n>=HUMAN_MIN?`찾는 쪽의 숨은 셋은 지금 사람 기록 ${humanPlays.length}판(초록 ${n}번)을 따라 움직여요.`:`찾는 쪽의 숨은 셋은 아직 기본 패턴으로 움직여요. 숨는 쪽을 하면 내 움직임이 기록되고, 초록 ${HUMAN_MIN}번 넘게 모이면 숨은 셋이 그걸 따라 해요(지금 ${n}번).`;}
+
+// ---------- 숨은 AI(찾는 쪽 판) ----------
+// 초록마다 창 하나를 골라 그대로 다시 한다. 사람 기록이 충분하면 거기서(도장까지 남은 줄 수가 같은 창), 아니면 성격별 기본 패턴에서.
+// 기본 패턴은 소셜 스텔스 게임에서 사람이 들키는 습관을 옮긴 것: 초록 직후 몰아치기, 일찍 얼기, 되돌리기, 일반 상자처럼 아무 때나 한 번,
+// 초록이 한참 지난 뒤 '아직 괜찮겠지' 하고 옮기기(노랑에 걸리기 쉬움), 시간 없으면 빨강에 지르기.
+const PERS={rush:{react:.5},careful:{react:.3},mimic:{react:.2}};
+const rnd=(a,b)=>a+Math.random()*(b-a),chance=p=>Math.random()<p;
+function synthWin(pers,need,panic){const hops=[];
+  if(pers==='rush'){if(need>0){let t=chance(.5)?rnd(.15,.4):rnd(.8,2.6);hops.push({ph:'g',t,dir:1});if(chance(.25)){t+=rnd(.4,.6);hops.push({ph:'g',t,dir:-1});t+=rnd(.4,.6);hops.push({ph:'g',t,dir:1});}if(need>1){t+=rnd(.42,.65);hops.push({ph:'g',t,dir:1});}}
+    else if(chance(.3))hops.push({ph:'g',t:rnd(.2,.6),dir:0});if(need>0&&chance(.12+panic*.2))hops.push({ph:'r',t:rnd(.3,1.6),dir:1});}
+  else if(pers==='careful'){if(need>0&&!chance(.2))hops.push({ph:'g',t:rnd(1,2.6),dir:1});if(need>0&&chance(panic*.15))hops.push({ph:'r',t:rnd(.8,2),dir:1});}
+  else{if(need>0&&!chance(.3))hops.push({ph:'g',t:rnd(.3,2.6),dir:1});else if(chance(.35))hops.push({ph:'g',t:rnd(.3,2.6),dir:0});}
+  return {need,hops};}
+function pickWin(b){const need=needOf(b),pool=humanWins();
+  if(pool.length>=HUMAN_MIN){const same=pool.filter(w=>Math.min(2,w.need|0)===need);const src=same.length?same:pool;b.src='human';return src[(Math.random()*src.length)|0];}
+  b.src='synth';return synthWin(b.pers,need,1-Math.max(0,time)/Math.max(1,b.T0||150));}
+// 사람이 노랑을 늦게 알아챈 시간: 기록에 노랑 중 움직임이 있으면 거기서, 없으면 성격값
+function reactOf(b){const ys=humanWins().flatMap(w=>w.hops).filter(h=>h.ph==='y');return ys.length&&b.src==='human'?ys[(Math.random()*ys.length)|0].t:PERS[b.pers].react*DIFF[diffKey].k;}
+function botPlan(b){const w=pickWin(b);b.plan=(w.hops||[]).slice().sort((x,y)=>'gyr'.indexOf(x.ph)-'gyr'.indexOf(y.ph)||x.t-y.t);b.pi=0;b.react=reactOf(b);}
+function botHop(b,dir){const sd=stampDir(world,b,b.stamp);let h=-1;
+  if(dir===1)h=sd;else if(dir===-1)h=sd>=0?(sd+2)%4:world.randSide(b);else h=world.randSide(b);
+  if(h>=0)world.hop(b,h);b.pi++;}
+function botThink(b,dt){if(b.found||b.gone||b.pending)return;if(!b.plan)botPlan(b);if(world.midMove(b))return;
+  const hp=b.plan[b.pi];if(!hp)return;const L=world.light,lt=world.lightT;
+  if(hp.ph==='g'){if(L==='green'){if(lt>=hp.t)botHop(b,hp.dir);}
+    else if(L==='yellow'&&lt<b.react)botHop(b,hp.dir); // 노랑을 아직 못 봤다
+    else b.pi++;}
+  else if(hp.ph==='y'){if(L==='yellow'&&lt>=hp.t)botHop(b,hp.dir);else if(L==='red')b.pi++;}
+  else if(L==='red'&&lt>=hp.t)botHop(b,hp.dir);}
 
 // AI 직원
 function huntStep(dt){const p=player,D=DIFF[diffKey];worker.position.z=wz(H-1)+CS*.9;
@@ -539,7 +583,7 @@ function frame(now){const dt=Math.min(.05,(now-last)/1000);last=now;
     world.events.forEach(ev=>{
       if(ev.type==='thud'){const m=meshes.get(ev.b);if(m)m.bump=.3;if(ev.off)alertOn(ev.b);if(live&&mode==='hide'&&ev.off)sus(ev.b,3.6);}
       if(ev.type==='frozen'){alertOn(ev.b);if(live&&mode==='hide'){sus(ev.b,3.2);if(ev.b===player)say('넘어가다 걸렸다!',1.2);}}
-      if(ev.type==='light'&&ev.s==='green')alertsOff();});
+      if(ev.type==='light'){if(ev.s==='green')alertsOff();if(live&&mode==='hide')recLight(ev.s);if(live&&mode==='seek'&&ev.s==='green')bots.forEach(b=>{if(!b.found&&!b.gone)botPlan(b);});}});
 
 
 
@@ -563,7 +607,7 @@ function frame(now){const dt=Math.min(.05,(now-last)/1000);last=now;
   if(msgT>0){msgT-=dt;if(msgT<=0)$('msg').hidden=true;}
   R.render(S,cam);requestAnimationFrame(frame);}
 // 테스트용 들여다보기(화면 흐름 테스트가 씀)
-window.__box={get mode(){return mode;},get player(){return player;},get world(){return world;},get over(){return over;},FEAT};
+window.__box={human:{get plays(){return humanPlays.length;},get windows(){return humanWins().length;},get src(){return humanSrc;}},get bots(){return bots;},get mode(){return mode;},get player(){return player;},get world(){return world;},get over(){return over;},FEAT};
 resize();menu();requestAnimationFrame(frame);
 })();
 </script>
