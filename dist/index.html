@@ -20,8 +20,12 @@ body{background:var(--floor);color:var(--ink);font-family:var(--f-ui);padding-le
 .bar .sp{flex:1}
 .meter{display:inline-block;vertical-align:middle;width:140px;height:10px;background:var(--line);position:relative}
 .meter i{position:absolute;left:0;top:0;bottom:0;background:var(--alert);width:0}
+.meter s{position:absolute;left:37%;top:-3px;bottom:-3px;width:2px;background:var(--ink)} /* 이 선(의심 1.1)을 넘으면 빨간불에 찍힐 수 있음, 끝까지 차면 거의 확실 */
+#susWrap .warn{display:none;color:var(--alert);font-weight:700}#susWrap.hot .warn{display:inline}
 .sw{display:inline-block;width:18px;height:12px;vertical-align:middle;border:2px solid var(--ink)}
 .stage{position:relative;width:100%;aspect-ratio:16/9;max-width:100%;background:#d6d0c2;border:2px solid var(--ink);overflow:hidden}
+.stage.red{border-color:var(--alert);box-shadow:inset 0 0 0 4px var(--alert)}
+.redtag{position:absolute;right:12px;top:10px;background:var(--alert);color:#fff;font-weight:700;font-size:13px;padding:4px 10px}
 canvas{width:100%;height:100%;display:block;touch-action:none}
 .panel{position:absolute;inset:0;background:rgba(30,28,24,.72);display:flex;align-items:center;justify-content:center;padding:16px;overflow:auto}
 .box{background:var(--card);max-width:680px;width:100%;padding:20px 22px;display:flex;flex-direction:column;gap:12px;border:3px solid var(--ink);box-shadow:8px 8px 0 var(--hazard);max-height:100%;overflow:auto;box-sizing:border-box}
@@ -78,13 +82,13 @@ button{touch-action:manipulation}
     <span id="modeL"><b>대기 중</b></span>
     <span id="timeWrap" hidden>남은 시간 <b id="timeL">-</b></span>
     <span id="goalL"></span>
-    <span id="susWrap" hidden>직원 눈길 <span class="meter"><i id="susBar"></i></span></span>
+    <span id="susWrap" hidden>직원 눈길 <span class="meter"><i id="susBar"></i><s></s></span> <small class="warn">찍힐 수 있음</small></span>
     <span class="sp"></span>
     <button class="alt" id="pauseBtn" hidden>일시정지</button>
   </div>
   <div class="stage" id="stage">
     <canvas id="c" aria-label="물류센터 컨베이어 위 택배 상자들"></canvas>
-    <div class="msg" id="msg" hidden></div>
+    <div class="msg" id="msg" hidden></div><div class="redtag" id="redTag" hidden>직원이 보는 중</div>
     <div class="touch" id="touch"><button class="alt tl" id="tPause" hidden>일시정지</button><button class="br" id="tLook" hidden>돌아보기</button><span class="hint" id="tHint" hidden>위·아래를 누르거나 밀어서 레일 이동</span></div>
     <div class="panel" id="panel"><div class="box" id="panelBox"></div></div>
   </div>
@@ -203,7 +207,7 @@ function createWorld(str,opt){opt=opt||{};const rng=opt.rng||Math.random;const {
     w.boxes.forEach((b,i)=>{b.follow=1;if(!P[i])return;const hx=DX[b.d],hy=DY[b.d];
       for(let j=0;j<w.boxes.length;j++){if(j===i||!P[j])continue;if(w.boxes[j].d!==b.d||w.boxes[j].slide)continue;const rx=P[j][0]-P[i][0],ry=P[j][1]-P[i][1];const al=rx*hx+ry*hy;if(al<=0||al>.95)continue;const lat=Math.abs(rx*hy-ry*hx);if(lat>.42)continue;
         b.follow=Math.min(b.follow,Math.max(0,(al-.62)/.33));}});
-    for(const b of w.boxes){if(b.gone)continue;if(b.slide&&w.light!=='red'){b.slide.t+=dt/.38;if(b.slide.t>=1)b.slide=null;}
+    for(const b of w.boxes){if(b.gone)continue;if(b.slide){b.slide.t+=dt/.38;if(b.slide.t>=1)b.slide=null;}
       if(b.pending){respawn(b);continue;}b.sus=Math.max(0,b.sus-dt*.35);if(b.fakeT>0)b.fakeT-=dt;
       if(b.hold>0){b.hold-=dt;continue;}
       const t=tiles[b.cy][b.cx];if(t.t==='jam'&&b.s===0&&!w.jamOpen(b.cx,b.cy))continue;
@@ -408,14 +412,16 @@ function pause(){if(over||!mode||mode==='edit'||paused)return;paused=true;$('pan
 function resume(){paused=false;$('panel').hidden=true;}
 $('pauseBtn').onclick=pause;$('tPause').onclick=pause;
 function updHud(){$('timeL').textContent=Math.max(0,Math.ceil(time))+'초';
-  if(mode==='hide'&&player){$('goalL').innerHTML=`도장 <b>${player.got||0}/${goal}</b> · 직원 스캔 <b>${hunt.scans}</b>번`;$('susBar').style.width=Math.min(100,player.sus*20)+'%';
+  if(mode==='hide'&&player){$('goalL').innerHTML=`도장 <b>${player.got||0}/${goal}</b> · 직원 스캔 <b>${hunt.scans}</b>번`;$('susBar').style.width=Math.min(100,player.sus/3*100)+'%';$('susWrap').classList.toggle('hot',player.sus>1.1);
     if(FEAT.fake){$('fakeBtn').textContent=`걸린 척 (C) ${fakes}`;$('fakeBtn').disabled=!fakes;}}
   else if(mode==='seek'){$('goalL').innerHTML=`찾음 <b>${found}</b> · 놓침 <b>${escaped}</b> · 스캔 <b>${scans}</b>번`;
     $('lookBtn').disabled=$('tLook').disabled=!(world.light==='green'&&world.lightT>=1);}}
 
 // ---------- 숨는 쪽 조작 ----------
 const KD={KeyD:0,ArrowRight:0,KeyS:1,ArrowDown:1,KeyA:2,ArrowLeft:2,KeyW:3,ArrowUp:3};
-function playerHop(h){if(mode!=='hide'||over||paused||!player||player.hold>0)return;const sd=stampDir(world,player,player.stamp);if(world.hop(player,h))recHop(sd<0?0:(h===sd?1:-1));}
+// 넘어가는 0.38초 중에 누른 건 버리지 않고 하나 기억했다가 다 넘어가면 바로 한다(0.3초 안에 누른 것만)
+let hopQ=null;
+function playerHop(h){if(mode!=='hide'||over||paused||!player||player.hold>0)return;if(world.midMove(player)){hopQ={h,t:performance.now()};return;}hopQ=null;const sd=stampDir(world,player,player.stamp);if(world.hop(player,h))recHop(sd<0?0:(h===sd?1:-1));}
 // 키보드·스와이프·버튼이 모두 이 함수로: 옆 방향이면 레일 넘어가기, 진행/반대 방향이면 (속도 켬일 때만) 덜컹
 function hideInput(h){if(mode!=='hide'||over||paused||!player||player.pending)return;if(h%2!==player.d%2)playerHop(h);else if(FEAT.speed)world.thud(player,false);}
 function fake(){if(!FEAT.fake||mode!=='hide'||over||paused||!fakes||player.hold>0||player.pending)return;fakes--;player.hold=1.5;player.fakeT=1.5;const m=meshes.get(player);if(m)m.bump=1.5;say('덜컹… (걸린 척)');updHud();}
@@ -576,6 +582,7 @@ function frame(now){const dt=Math.min(.05,(now-last)/1000);last=now;
       if(FEAT.speed&&mode==='hide'&&player&&!player.pending){let k=0;Object.keys(KD).forEach(code=>{if(keys[code]){const h=KD[code];if(h===player.d)k=1;else if(h===(player.d+2)%4)k=-1;}});
         player.mul=k>0?1.45:k<0?.6:1;if(k&&world.light==='red')sus(player,dt*3);}
       if(mode==='seek')bots.forEach(b=>{if(!b.T0)b.T0=time;botThink(b,dt);});}
+    if(live&&mode==='hide'&&hopQ&&player&&!world.midMove(player)){const q=hopQ;hopQ=null;if(performance.now()-q.t<300)playerHop(q.h);}
     if(live&&mode==='hide'){sig(world,dt);
       const s=player.stamp;if(s&&world.light==='green'&&world.lightT>.6&&world.boxes.some(b=>!b.gone&&!b.pending&&Math.abs(b.cx-s[0])<=1&&Math.abs(b.cy-s[1])<=1)&&Math.random()<dt*.9)world.setLight('yellow');}
     else if(live&&mode==='seek')seekSignal(dt);else if(!live)idleSig(world,dt);
@@ -591,6 +598,7 @@ function frame(now){const dt=Math.min(.05,(now-last)/1000);last=now;
 
 
 
+    {const on=live&&world.light==='red';stage.classList.toggle('red',on);$('redTag').hidden=!on;if(on)$('redTag').textContent=mode==='seek'?`보는 중 ${Math.max(0,2.5-world.lightT).toFixed(1)}초 · 지금 옆으로 가는 상자는 !`:'직원이 보는 중';}
     lamps.forEach(l=>{l.red.material.color.set(world.light==='red'?'#ff3b30':'#3d1513');l.yel.material.color.set(world.light==='yellow'?'#ffcc00':'#3a3010');l.green.material.color.set(world.light==='green'?'#35e06f':'#0f2d1a');});
 
     const blink=false;

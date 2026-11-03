@@ -92,7 +92,7 @@ function createWorld(str,opt){opt=opt||{};const rng=opt.rng||Math.random;const {
     w.boxes.forEach((b,i)=>{b.follow=1;if(!P[i])return;const hx=DX[b.d],hy=DY[b.d];
       for(let j=0;j<w.boxes.length;j++){if(j===i||!P[j])continue;if(w.boxes[j].d!==b.d||w.boxes[j].slide)continue;const rx=P[j][0]-P[i][0],ry=P[j][1]-P[i][1];const al=rx*hx+ry*hy;if(al<=0||al>.95)continue;const lat=Math.abs(rx*hy-ry*hx);if(lat>.42)continue;
         b.follow=Math.min(b.follow,Math.max(0,(al-.62)/.33));}});
-    for(const b of w.boxes){if(b.gone)continue;if(b.slide&&w.light!=='red'){b.slide.t+=dt/.38;if(b.slide.t>=1)b.slide=null;}
+    for(const b of w.boxes){if(b.gone)continue;if(b.slide){b.slide.t+=dt/.38;if(b.slide.t>=1)b.slide=null;}
       if(b.pending){respawn(b);continue;}b.sus=Math.max(0,b.sus-dt*.35);if(b.fakeT>0)b.fakeT-=dt;
       if(b.hold>0){b.hold-=dt;continue;}
       const t=tiles[b.cy][b.cx];if(t.t==='jam'&&b.s===0&&!w.jamOpen(b.cx,b.cy))continue;
