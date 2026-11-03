@@ -64,7 +64,8 @@ button{touch-action:manipulation}
   body{padding-block:4px}
   .wrap{gap:4px}
   .bar{font-size:12px;min-height:28px;gap:4px 12px}
-  .bar #pauseBtn,.tools,#ver{display:none!important}
+  .tools,#ver{display:none!important}
+  .bar #pauseBtn{min-height:30px;font-size:12px;padding:0 10px;border-width:2px}
   .stage{aspect-ratio:auto;height:calc(100dvh - 52px)}
   .touch{display:block}
   .meter{width:70px}
@@ -79,12 +80,12 @@ button{touch-action:manipulation}
     <span id="goalL"></span>
     <span id="susWrap" hidden>직원 눈길 <span class="meter"><i id="susBar"></i></span></span>
     <span class="sp"></span>
-    <button class="alt" id="pauseBtn" hidden>일시정지 (Esc)</button>
+    <button class="alt" id="pauseBtn" hidden>일시정지</button>
   </div>
   <div class="stage" id="stage">
     <canvas id="c" aria-label="물류센터 컨베이어 위 택배 상자들"></canvas>
     <div class="msg" id="msg" hidden></div>
-    <div class="touch" id="touch"><button class="alt tl" id="tPause" hidden>일시정지</button><button class="br" id="tLook" hidden>돌아보기</button><span class="hint" id="tHint" hidden>위·아래로 밀어서 옆 레일로</span></div>
+    <div class="touch" id="touch"><button class="alt tl" id="tPause" hidden>일시정지</button><button class="br" id="tLook" hidden>돌아보기</button><span class="hint" id="tHint" hidden>위·아래를 누르거나 밀어서 레일 이동</span></div>
     <div class="panel" id="panel"><div class="box" id="panelBox"></div></div>
   </div>
   <div class="tools" id="hideTools" hidden>
@@ -265,7 +266,9 @@ const wx=x=>(x-(W-1)/2)*CS,wz=y=>(y-(H-1)/2)*CS;
 const triGeo=(()=>{const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute([.55,0,0,-.35,0,-.42,-.35,0,.42],3));return g;})();
 function arrow(d,color,ox=0,oz=0,s=1){const a=new THREE.Mesh(triGeo,B(color));a.rotation.y=-d*Math.PI/2;a.scale.setScalar(s);a.position.set(ox,.34,oz);return a;}
 function exitColorAhead(tiles,x,y,d){for(let i=0;i<W*H;i++){x=(x+DV[d][0]+W)%W;y=(y+DV[d][1]+H)%H;const t=tiles[y][x];if(!t||t.t==='turn')return -1;if(t.t==='exit')return t.c;d=t.d;}return -1;}
+let occ={x0:0,x1:13,y0:0,y1:5}; // 칸이 실제로 있는 범위(카메라 맞추기용)
 function buildTiles(tiles){S.remove(tileG);tileG=new THREE.Group();S.add(tileG);dyn=[];H=tiles.length;W=tiles[0].length;const P=CS*.82;
+  occ={x0:W,x1:-1,y0:H,y1:-1};tiles.forEach((r,y)=>r.forEach((t,x)=>{if(t){occ.x0=Math.min(occ.x0,x);occ.x1=Math.max(occ.x1,x);occ.y0=Math.min(occ.y0,y);occ.y1=Math.max(occ.y1,y);}}));if(occ.x1<0)occ={x0:0,x1:W-1,y0:0,y1:H-1};
   const plateGeo=new THREE.BoxGeometry(P,.3,P);
   for(let y=0;y<H;y++)for(let x=0;x<W;x++){const t=tiles[y][x];if(!t)continue;const g=new THREE.Group();g.position.set(wx(x),0,wz(y));tileG.add(g);
     const base={belt:{n:'#3a3936',f:'#2f2c27',s:'#30353b'}[t.sp],sort:'#3a3936',turn:'#454340',jam:'#3a3936',relabel:COL[t.c],exit:'#3a3936',spawn:'#24231f'}[t.t];
@@ -291,7 +294,18 @@ function buildTiles(tiles){S.remove(tileG);tileG=new THREE.Group();S.add(tileG);
     const green=new THREE.Mesh(new THREE.SphereGeometry(.55,20,14),B('#0f2d1a'));green.position.set(0,4.3,.45);g.add(green);lamps.push({red,yel,green});}
   fitCam();}
 // 화면 비율에 맞춰 카메라 거리: 16:9보다 좁으면 가로가 다 들어오게 뒤로, 넓으면(폰 가로) 세로가 다 들어오는 데까지 당긴다
-function fitCam(){const a=cam.aspect||16/9;const span=Math.max((W+2.4)*CS*(16/9)/a,H*CS*1.75);cam.position.set(-CS*.6,span*.92+4,H*CS*.6+span*.42);cam.lookAt(-CS*.6,0,H*.2);}
+// 카메라: 내려다보는 각도는 고정, 실제 칸 범위 + 신호등 + (숨는 쪽이면) 직원이 화면 가장자리 6% 안에 꽉 차도록 거리와 중심을 맞춘다
+const camDir=new THREE.Vector3(0,.92,.42).normalize(),fitV=new THREE.Vector3();
+function fitCam(){const pts=[],h=CS*.5,X0=wx(occ.x0)-h,X1=wx(occ.x1)+h,Z0=wz(occ.y0)-h,Z1=wz(occ.y1)+h;
+  [[X0,Z0],[X1,Z0],[X0,Z1],[X1,Z1]].forEach(([x,z])=>{pts.push([x,0,z],[x,3.6,z]);});
+  const lx=wx(0)-CS*1.15,lz=wz((H-1)/2);pts.push([lx-1,0,lz],[lx-1,7.6,lz],[lx+1,7.6,lz]);
+  if(mode==='hide')pts.push([wx(occ.x0),0,wz(H-1)+CS*.9+1],[wx(occ.x1),0,wz(H-1)+CS*.9+1],[wx(occ.x0),3.4,wz(H-1)+CS*.9+1]);
+  let cx=(X0+X1)/2+lx*.04,cz=(Z0+Z1)/2,d=60;
+  const ext=dd=>{cam.position.set(cx+camDir.x*dd,camDir.y*dd,cz+camDir.z*dd);cam.lookAt(cx,0,cz);cam.updateMatrixWorld();let a=1,b=-1,c=1,e=-1;
+    pts.forEach(p=>{fitV.set(p[0],p[1],p[2]).project(cam);a=Math.min(a,+fitV.x||0);b=Math.max(b,+fitV.x||0);c=Math.min(c,+fitV.y||0);e=Math.max(e,+fitV.y||0);});return [a,b,c,e];};
+  for(let k=0;k<3;k++){let lo=5,hi=400;for(let i=0;i<24;i++){d=(lo+hi)/2;const [a,b,c,e]=ext(d);if(Math.max(-a,b,-c,e)>.94)lo=d;else hi=d;}d=hi;
+    const [a,b,c,e]=ext(d),t=Math.tan(cam.fov*Math.PI/360);cx+=(a+b)/2*d*t*(cam.aspect||16/9);cz-=(c+e)/2*d*t/camDir.y;}
+  ext(d);}
 function makeEdGrid(){const g=new THREE.Group();for(let x=0;x<=W;x++){const l=new THREE.Mesh(new THREE.BoxGeometry(.06,.02,H*CS),B('#8f8775'));l.position.set((x-W/2)*CS,.03,0);g.add(l);}
   for(let y=0;y<=H;y++){const l=new THREE.Mesh(new THREE.BoxGeometry(W*CS,.02,.06),B('#8f8775'));l.position.set(0,.03,(y-H/2)*CS);g.add(l);}return g;}
 
@@ -339,7 +353,7 @@ function saveRecord(r){records.unshift(r);records=records.slice(0,30);try{localS
 
 // ---------- 시작/메뉴/끝 ----------
 // 터치 기기 무대 위 버튼(일시정지·돌아보기·밀기 안내). m=null이면 모두 숨김
-function touchUi(m){$('tPause').hidden=!m;$('tLook').hidden=m!=='seek';$('tHint').hidden=m!=='hide';}
+function touchUi(m){$('tPause').hidden=true;$('tLook').hidden=m!=='seek';$('tHint').hidden=m!=='hide';}
 const coarse=()=>typeof matchMedia==='function'&&matchMedia('(pointer:coarse)').matches;
 // 폰: 판을 시작할 때 전체 화면 + 가로 고정 시도(안드로이드). 아이폰은 둘 다 안 돼서 세로면 가림막만 뜬다
 function goFull(){if(!coarse())return;try{const d=document.documentElement;if(!document.fullscreenElement&&d.requestFullscreen)d.requestFullscreen().then(()=>{try{screen.orientation.lock('landscape').catch(()=>{});}catch(e){}},()=>{});}catch(e){}}
@@ -414,10 +428,17 @@ $('fakeBtn').onclick=fake;
 let swipe=null;const SWIPE=22;
 function swipeDir(dx,dy){return Math.abs(dy)>=Math.abs(dx)?(dy>0?1:3):(dx>0?0:2);}
 function swipeCheck(e){if(!swipe||swipe.done||e.pointerId!==swipe.id)return;const dx=e.clientX-swipe.x,dy=e.clientY-swipe.y;if(Math.hypot(dx,dy)<SWIPE)return;swipe.done=true;hideInput(swipeDir(dx,dy));$('tHint').hidden=true;}
-cv.addEventListener('pointerdown',e=>{if(mode!=='hide'||over||paused)return;swipe={id:e.pointerId,x:e.clientX,y:e.clientY,done:false};try{cv.setPointerCapture(e.pointerId);}catch(err){}});
-cv.addEventListener('pointermove',e=>{if(mode==='hide')swipeCheck(e);});
-cv.addEventListener('pointerup',e=>{if(mode==='hide')swipeCheck(e);swipe=null;});
-cv.addEventListener('pointercancel',()=>swipe=null);
+// 터치 탭: 내 상자보다 위를 누르면 위 레일, 아래를 누르면 아래 레일(세로 레일 맵이면 왼쪽/오른쪽)
+const tapV=new THREE.Vector3();
+function tapMove(e){if(!player||player.pending)return;const r=cv.getBoundingClientRect(),[x,y]=world.pos(player);tapV.set(wx(x),player.size*.8,wz(y)).project(cam);
+  const px=r.left+(1+(+tapV.x||0))/2*r.width,py=r.top+(1-(+tapV.y||0))/2*r.height;
+  if(player.d%2===0){if(Math.abs(e.clientY-py)<6)return;hideInput(e.clientY<py?3:1);}else{if(Math.abs(e.clientX-px)<6)return;hideInput(e.clientX<px?2:0);}$('tHint').hidden=true;}
+// 화면 어디서든(버튼 위 제외): 밀면 그 방향, 터치로 톡 누르면 tapMove
+const onBtn=e=>!!(e.target&&e.target.closest&&e.target.closest('button,select,textarea'));
+document.addEventListener('pointerdown',e=>{if(mode!=='hide'||over||paused||onBtn(e))return;swipe={id:e.pointerId,x:e.clientX,y:e.clientY,done:false,touch:e.pointerType&&e.pointerType!=='mouse'};});
+document.addEventListener('pointermove',e=>{if(mode==='hide')swipeCheck(e);});
+document.addEventListener('pointerup',e=>{if(mode==='hide'&&swipe&&e.pointerId===swipe.id){swipeCheck(e);if(!swipe.done&&swipe.touch&&!over&&!paused)tapMove(e);}swipe=null;});
+document.addEventListener('pointercancel',()=>swipe=null);
 
 // ---------- 찾는 쪽 ----------
 function seekSignal(dt){const D=DIFF[diffKey];if(world.light==='yellow'&&world.lightT>=D.yellow)world.setLight('red');else if(world.light==='red'&&world.lightT>=2.5)world.setLight('green');}

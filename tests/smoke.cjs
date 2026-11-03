@@ -24,7 +24,8 @@ function P(name = 'p') {
 }
 const els = {};
 const el = id => els[id] || (els[id] = { id, hidden: false, innerHTML: '', textContent: '', style: {}, value: 'basic', classList: { toggle() {} }, addEventListener(t, f) { ((this.h = this.h || {})[t] = this.h[t] || []).push(f); }, fire(t, e) { (this.h && this.h[t] || []).forEach(f => f(e)); }, querySelector: () => el('q' + Math.random()), querySelectorAll: () => [], setPointerCapture() {}, getBoundingClientRect: () => ({ left: 0, top: 0, width: 960, height: 540 }), focus() {}, select() {}, dataset: {} });
-global.document = { createElement: () => ({ width: 0, height: 0, getContext: () => P('ctx') }), getElementById: el, querySelectorAll: () => [], activeElement: null };
+const docH = {};
+global.document = { createElement: () => ({ width: 0, height: 0, getContext: () => P('ctx') }), getElementById: el, querySelectorAll: () => [], activeElement: null, addEventListener(t, f) { (docH[t] = docH[t] || []).push(f); }, fire(t, e) { (docH[t] || []).forEach(f => f({ target: { closest: () => null }, ...e })); } };
 global.window = global; global.addEventListener = () => {}; global.devicePixelRatio = 1;
 global.localStorage = { getItem: () => null, setItem() {}, removeItem() {} };
 let raf = [], t = 0;
@@ -54,7 +55,7 @@ try {
   els.bHide.onclick(); run(20);
   {
     const B = global.__box, p = B.player, cy0 = p.cy, up = cy0 > 1;
-    const c = els.c, e0 = { pointerId: 7, pointerType: 'touch', button: 0, clientX: 480, clientY: 270 };
+    const c = global.document, e0 = { pointerId: 7, pointerType: 'touch', button: 0, clientX: 480, clientY: 270 };
     c.fire('pointerdown', e0);
     c.fire('pointermove', { ...e0, clientY: 270 + (up ? -10 : 10) });
     const before = p.cy;
@@ -63,6 +64,18 @@ try {
     c.fire('pointermove', { ...e0, clientY: 270 + (up ? -90 : 90) });
     c.fire('pointerup', { ...e0, clientY: 270 + (up ? -90 : 90) });
     ok(before === cy0 && after === cy0 + (up ? -1 : 1) && p.cy === after, `스와이프: 10px는 무시, 40px에 한 줄 이동, 한 번 밀기에 한 번만 (${cy0}→${p.cy})`);
+  }
+  // 톡 누르기: 가짜 화면에선 내 상자가 화면 한가운데(y=270)로 잡히므로, 그보다 위를 누르면 위 레일
+  run(20);
+  {
+    const B = global.__box, p = B.player, cy0 = p.cy, up = cy0 > 1, c = global.document;
+    const e1 = { pointerId: 8, pointerType: 'touch', button: 0, clientX: 300, clientY: up ? 120 : 420 };
+    c.fire('pointerdown', e1); c.fire('pointerup', e1);
+    ok(p.cy === cy0 + (up ? -1 : 1), `톡 누르기: 내 상자보다 ${up ? '위' : '아래'}를 누르면 그쪽 레일로 (${cy0}→${p.cy})`);
+    run(20);
+    const cy1 = p.cy, e2 = { pointerId: 9, pointerType: 'mouse', button: 0, clientX: 300, clientY: up ? 420 : 120 };
+    c.fire('pointerdown', e2); c.fire('pointerup', e2);
+    ok(p.cy === cy1, '마우스 클릭은 레일을 옮기지 않음(PC는 키보드)');
   }
   els.pauseBtn.onclick(); els.quit.onclick();
 
