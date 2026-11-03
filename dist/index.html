@@ -239,6 +239,7 @@ if(typeof module!=='undefined')module.exports={STAMPS,nextStamp,stampDir,signalA
 // speed: 진행/반대 방향키로 빠르게·느리게  fake: 걸린 척(C)  colors: 라벨 색·출고구 색(일반 상자가 자기 색 레일로)
 // special: 빠른·느린 벨트, 정체·재분류 칸 맵  diff: 난이도 선택  editor: 맵 만들기  records: 기록 화면  pin: 우클릭 핀
 const FEAT={speed:false,fake:false,colors:false,special:false,diff:false,editor:false,records:false,pin:false};
+const HIDE_EXTRA=7; // 숨는 쪽 제한 시간 덤(초). v12 플레이: 30초는 약간 부족, 너무 주면 널널
 const $=id=>document.getElementById(id);
 const cv=$('c'),stage=$('stage');
 const R=new THREE.WebGLRenderer({canvas:cv,antialias:true});R.setPixelRatio(Math.min(2,devicePixelRatio));
@@ -343,7 +344,7 @@ const coarse=()=>typeof matchMedia==='function'&&matchMedia('(pointer:coarse)').
 // 폰: 판을 시작할 때 전체 화면 + 가로 고정 시도(안드로이드). 아이폰은 둘 다 안 돼서 세로면 가림막만 뜬다
 function goFull(){if(!coarse())return;try{const d=document.documentElement;if(!document.fullscreenElement&&d.requestFullscreen)d.requestFullscreen().then(()=>{try{screen.orientation.lock('landscape').catch(()=>{});}catch(e){}},()=>{});}catch(e){}}
 function start(m){goFull();mode=m;over=false;paused=false;newWorld();
-  const D=DIFF[diffKey];const base=calibrate(curEntry().str,{colors:FEAT.colors});goal=STAMPS;time=m==='hide'?Math.max(30,Math.round(base*D.slack)):Math.max(60,Math.round(base*2.6));scans=6;found=0;escaped=0;fakes=FEAT.fake?2:0;sig=signalAI(DIFF[diffKey]);world.setLight('green');t0=performance.now();clearStamps();
+  const D=DIFF[diffKey];const base=calibrate(curEntry().str,{colors:FEAT.colors});goal=STAMPS;time=m==='hide'?Math.max(30,Math.round(base*D.slack))+HIDE_EXTRA:Math.max(60,Math.round(base*2.6));scans=6;found=0;escaped=0;fakes=FEAT.fake?2:0;sig=signalAI(DIFF[diffKey]);world.setLight('green');t0=performance.now();clearStamps();
   hunt={t:2,target:null,aim:0,scans:15,stun:0};bots=[];hideMarks();player=null;
   if(world.boxes.length<4){curKey='basic';menu();say('이 맵은 상자가 돌 자리가 부족해요');return;}
   if(m==='hide'){player=world.add('player')||world.boxes[0];player.kind='player';player.mul=1;player.got=0;placeStamp(player);[meArrow,worker].forEach(o=>o.visible=true);}
