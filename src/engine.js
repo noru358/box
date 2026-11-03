@@ -4,10 +4,12 @@
 const DIRS='>v<^',DX=[1,0,-1,0],DY=[0,1,0,-1];
 const SPD={n:1,f:1.55,s:.6},BASE=1.25; // 칸/초
 const CYCLE=4,ON=1.2,WARN=1;
-const WANDER=.45;
+const WANDER=.45; // 색 끔일 때 일반 상자가 초록에 옆으로 옮기는 빈도(초당, 한 초록에 한 번까지)
 // 벨트 정지 시험(v12-stop): 빨강이면 벨트가 서고, 일반 상자는 0~NPC_LAG초 미끄러지다 선다(초록에 다시 갈 때도 0~NPC_LAG초 늦게).
-// 사람 상자는 벨트와 상관없이 go(누르고 있음)일 때만 간다. 빨강이 GRACE초 지났는데도 가고 있으면 걸림.
-const NPC_LAG=.22,GRACE=.3; // 색 끔일 때 일반 상자가 초록에 옆으로 옮기는 빈도(초당, 한 초록에 한 번까지)
+// 일반 상자 중 NPC_LATE 비율은 빨강마다 GRACE를 넘겨 늦게 선다(미끼).
+// 사람 상자는 go가 참일 때 간다(기본은 감, 누르고 있는 동안 go=false). 빨강이 GRACE초 지났는데도 가고 있으면 걸림.
+// 옆 레일로 넘어가던 상자도 빨강 뒤 GRACE초까지는 마저 넘어가고, 그때도 걸쳐 있으면 걸림.
+const NPC_LAG=.22,GRACE=.45,NPC_LATE=.04;
 const DIFF={easy:{name:'쉬움',yellow:.65,late:.35,green:[1.6,4.2],red:[1.4,2.4],fake:.12,aim:1.0,slack:1.6,k:1.4},normal:{name:'보통',yellow:.45,late:.22,green:[1.0,3.8],red:[1.6,2.8],fake:.2,aim:.75,slack:1.25,k:1},hard:{name:'어려움',yellow:.3,late:.12,green:[.6,3.4],red:[1.8,3.2],fake:.3,aim:.55,slack:1.0,k:.7}};
 function laneMap(rows,bars){const W=14,g=[Array(W).fill('..')];
   rows.forEach(r=>{const t=Array(W).fill(r.sp+r.d);const right=r.d==='>';t[right?0:W-1]='I'+r.d;t[right?W-1:0]='X'+r.d+r.c;bars.forEach(c=>t[c]='S'+r.d);Object.entries(r.ex||{}).forEach(([k,v])=>t[+k]=v);g.push(t);});
@@ -75,8 +77,8 @@ function createWorld(str,opt){opt=opt||{};const rng=opt.rng||Math.random;const {
     b.d=t.d;}
   // 신호: 초록(등 돌림) → 노랑(돌아보는 중) → 빨강(봄)
   w.setLight=function(s){if(w.light===s)return;w.light=s;w.lightT=0;w.sortOn=s==='green';if(s==='green')w.win++;
-    if(beltStop)for(const b of w.boxes){if(s==='red')b.lagS=rng()*NPC_LAG;if(s==='green')b.lagG=rng()*NPC_LAG;}
-    if(s==='red')for(const b of w.boxes){if(b.gone||b.pending)continue;if(w.midMove(b)||(!beltStop&&b.kind!=='npc'&&b.mul!==1))w.events.push({type:'frozen',b,x:w.pos(b)[0],y:w.pos(b)[1]});}
+    if(beltStop){w.graceDone=false;for(const b of w.boxes){if(s==='red')b.lagS=rng()<NPC_LATE?GRACE+.05+rng()*.25:rng()*NPC_LAG;if(s==='green')b.lagG=rng()*NPC_LAG;}}
+    if(s==='red'&&!beltStop)for(const b of w.boxes){if(b.gone||b.pending)continue;if(w.midMove(b)||(!beltStop&&b.kind!=='npc'&&b.mul!==1))w.events.push({type:'frozen',b,x:w.pos(b)[0],y:w.pos(b)[1]});}
     w.events.push({type:'light',s});};
   // 사람 상자의 옆 칸 갈아타기
   w.thud=function(b,move){const [x,y]=w.pos(b);const off=w.light==='red';if(move)b.lastWin=w.win;w.events.push({type:'thud',b,x,y,off});return off;};
@@ -96,11 +98,11 @@ function createWorld(str,opt){opt=opt||{};const rng=opt.rng||Math.random;const {
     w.boxes.forEach((b,i)=>{b.follow=1;if(!P[i])return;const hx=DX[b.d],hy=DY[b.d];
       for(let j=0;j<w.boxes.length;j++){if(j===i||!P[j])continue;if(w.boxes[j].d!==b.d||w.boxes[j].slide)continue;const rx=P[j][0]-P[i][0],ry=P[j][1]-P[i][1];const al=rx*hx+ry*hy;if(al<=0||al>.95)continue;const lat=Math.abs(rx*hy-ry*hx);if(lat>.42)continue;
         b.follow=Math.min(b.follow,Math.max(0,(al-.62)/.33));}});
-    for(const b of w.boxes){if(b.gone)continue;if(b.slide&&w.light!=='red'){b.slide.t+=dt/.38;if(b.slide.t>=1)b.slide=null;}
+    for(const b of w.boxes){if(b.gone)continue;if(b.slide&&(w.light!=='red'||(beltStop&&w.lightT<GRACE))){b.slide.t+=dt/.38;if(b.slide.t>=1)b.slide=null;}
       if(b.pending){respawn(b);continue;}b.sus=Math.max(0,b.sus-dt*.35);if(b.fakeT>0)b.fakeT-=dt;
       if(b.hold>0){b.hold-=dt;continue;}
       if(beltStop){const npc=b.kind==='npc';
-        if(!npc&&w.light==='red'&&b.go&&w.lightT>GRACE&&b.caughtWin!==w.win){b.caughtWin=w.win;const [x,y]=w.pos(b);w.events.push({type:'frozen',b,x,y,late:true});}
+        if(w.light==='red'&&w.lightT>GRACE&&b.caughtWin!==w.win&&((!npc&&b.go)||(npc&&b.lagS>GRACE)||w.midMove(b))){b.caughtWin=w.win;const [x,y]=w.pos(b);w.events.push({type:'frozen',b,x,y,late:true});}
         const moving=npc?(w.light==='red'?w.lightT<b.lagS:(w.light==='yellow'||w.lightT>=b.lagG)):b.go;
         if(!moving)continue;}
       const t=tiles[b.cy][b.cx];if(t.t==='jam'&&b.s===0&&!w.jamOpen(b.cx,b.cy))continue;
@@ -131,4 +133,4 @@ const _cal={};function calibrate(str,opt){opt=opt||{};const key=str+'|'+(opt.col
   for(let r=0;r<7;r++){const w=createWorld(str,{rng,colors:opt.colors});const sig=signalAI(DIFF.normal,rng);const n=w.tiles.flat().filter(Boolean).length;for(let i=0;i<Math.round(n*.42);i++)w.add('npc');const p=w.add('player');if(!p)break;
     let got=0,s=nextStamp(w,p,rng),t=0;while(t<300&&got<STAMPS&&s){sig(w,1/20);if(w.light==='green'&&w.lightT>.25&&!w.midMove(p)){const h=stampDir(w,p,s);if(h>=0)w.hop(p,h);}w.step(1/20);w.events=[];t+=1/20;if(onStamp(w,p,s)){got++;s=nextStamp(w,p,rng);}}ts.push(t);}
   ts.sort((a,b)=>a-b);return _cal[key]=ts[(ts.length/2)|0]||90;}
-if(typeof module!=='undefined')module.exports={NPC_LAG,GRACE,onStamp,STAMPS,nextStamp,stampDir,signalAI,calibrate,createWorld,MAPS,parseMap,mapToStr,parseTile,tileToken,DIFF,DIRS,DX,DY,CYCLE,ON};
+if(typeof module!=='undefined')module.exports={NPC_LATE,NPC_LAG,GRACE,onStamp,STAMPS,nextStamp,stampDir,signalAI,calibrate,createWorld,MAPS,parseMap,mapToStr,parseTile,tileToken,DIFF,DIRS,DX,DY,CYCLE,ON};

@@ -104,7 +104,8 @@ for (const k of Object.keys(E.MAPS)) for (const colors of [true, false]) {
   for (let i = 0; i < 60; i++) { w.step(1 / 60); w.events = []; }
   w.setLight('yellow'); w.setLight('red'); w.events = [];
   b.go = false;
-  const npcs = w.boxes.filter(x => x.kind === 'npc'); let p0 = null, late = [];
+  w.boxes.forEach(x => { if (x.kind === 'npc') x.lagS = Math.min(x.lagS, E.NPC_LAG); }); // 미끼(늦게 서는 일반 상자)는 따로 본다
+  const npcs = w.boxes.filter(x => x.kind === 'npc' && !w.midMove(x)); let p0 = null, late = [];
   for (let i = 0; i < 60; i++) {
     w.step(1 / 60);
     if (Math.abs(w.lightT - (E.NPC_LAG + .05)) < 1 / 120 || (!p0 && w.lightT > E.NPC_LAG + .05)) p0 = p0 || npcs.map(x => w.pos(x));
@@ -112,7 +113,7 @@ for (const k of Object.keys(E.MAPS)) for (const colors of [true, false]) {
   }
   const moved = npcs.filter((x, i) => { const q = w.pos(x); return Math.hypot(q[0] - p0[i][0], q[1] - p0[i][1]) > .02; }).length;
   ok(moved === 0, `벨트 정지: 빨강 ${E.NPC_LAG + .05}초 뒤 움직인 일반 상자 ${moved}개`);
-  ok(late.includes(a) && !late.includes(b), '벨트 정지: 계속 간 사람은 걸리고, 뗀 사람은 안 걸림');
+  ok(late.includes(a) && !late.includes(b), '벨트 정지: 계속 간 사람은 걸리고, 멈춘 사람은 안 걸림');
 }
 
 console.log(failed ? `\n${failed}개 실패` : '\n엔진 테스트 전부 통과');
