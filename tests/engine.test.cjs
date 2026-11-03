@@ -97,5 +97,23 @@ for (const k of Object.keys(E.MAPS)) for (const colors of [true, false]) {
   ok(tested, '도장 판정 시험 상황을 만들었다');
 }
 
+// 8. 벨트 정지(시험 갈래): 빨강이면 일반 상자는 NPC_LAG 안에 서고, 계속 가는 사람 상자는 GRACE 뒤 걸림, 멈춘 사람은 안 걸림
+{
+  const w = E.createWorld(E.MAPS.plain.str, { colors: false, beltStop: true }); fill(w);
+  const a = w.add('player'), b = w.add('player'); a.go = true; b.go = true;
+  for (let i = 0; i < 60; i++) { w.step(1 / 60); w.events = []; }
+  w.setLight('yellow'); w.setLight('red'); w.events = [];
+  b.go = false;
+  const npcs = w.boxes.filter(x => x.kind === 'npc'); let p0 = null, late = [];
+  for (let i = 0; i < 60; i++) {
+    w.step(1 / 60);
+    if (Math.abs(w.lightT - (E.NPC_LAG + .05)) < 1 / 120 || (!p0 && w.lightT > E.NPC_LAG + .05)) p0 = p0 || npcs.map(x => w.pos(x));
+    late.push(...w.events.filter(e => e.type === 'frozen' && e.late).map(e => e.b)); w.events = [];
+  }
+  const moved = npcs.filter((x, i) => { const q = w.pos(x); return Math.hypot(q[0] - p0[i][0], q[1] - p0[i][1]) > .02; }).length;
+  ok(moved === 0, `벨트 정지: 빨강 ${E.NPC_LAG + .05}초 뒤 움직인 일반 상자 ${moved}개`);
+  ok(late.includes(a) && !late.includes(b), '벨트 정지: 계속 간 사람은 걸리고, 뗀 사람은 안 걸림');
+}
+
 console.log(failed ? `\n${failed}개 실패` : '\n엔진 테스트 전부 통과');
 process.exit(failed ? 1 : 0);

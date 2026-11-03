@@ -85,7 +85,7 @@ button{touch-action:manipulation}
   <div class="stage" id="stage">
     <canvas id="c" aria-label="물류센터 컨베이어 위 택배 상자들"></canvas>
     <div class="msg" id="msg" hidden></div>
-    <div class="touch" id="touch"><button class="alt tl" id="tPause" hidden>일시정지</button><button class="br" id="tLook" hidden>돌아보기</button><span class="hint" id="tHint" hidden>위·아래를 누르거나 밀어서 레일 이동</span></div>
+    <div class="touch" id="touch"><button class="alt tl" id="tPause" hidden>일시정지</button><button class="br" id="tLook" hidden>돌아보기</button><span class="hint" id="tHint" hidden><span id="tHintTxt">위·아래를 누르거나 밀어서 레일 이동</span></span></div>
     <div class="panel" id="panel"><div class="box" id="panelBox"></div></div>
   </div>
   <div class="tools" id="hideTools" hidden>
@@ -102,7 +102,7 @@ button{touch-action:manipulation}
     <div class="grp" id="colorPick"></div>
     <div class="grp"><button id="editDone">편집 끝</button></div>
   </div>
-  <p class="note" id="ver">v12 · 덜어낸 판 · 숨는 쪽은 도장 4개 · 찾는 쪽은 Space로 신호, 클릭으로 스캔</p>
+  <p class="note" id="ver">v12-stop 시험 · 벨트 정지 반응 시험 · 숨는 쪽은 Space(폰은 화면)를 누르고 있어야 간다</p>
 </div>
 
 <div class="rotate" id="rotate">폰을 가로로 돌려 주세요</div>
@@ -116,7 +116,8 @@ button{touch-action:manipulation}
 // v12 덜어내기 스위치. 다시 붙일 때 true로 바꾸고 rules.md·decisions.md를 같이 고친다.
 // speed: 진행/반대 방향키로 빠르게·느리게  fake: 걸린 척(C)  colors: 라벨 색·출고구 색(일반 상자가 자기 색 레일로)
 // special: 빠른·느린 벨트, 정체·재분류 칸 맵  diff: 난이도 선택  editor: 맵 만들기  records: 기록 화면  pin: 우클릭 핀
-const FEAT={speed:false,fake:false,colors:false,special:false,diff:false,editor:false,records:false,pin:false};
+const FEAT={speed:false,fake:false,colors:false,special:false,diff:false,editor:false,records:false,pin:false,
+  stop:true}; // stop: v12-stop 시험 갈래. 빨강이면 벨트가 서고, 사람 상자는 누르고 있을 때만 간다(떼면 멈춤)
 const HIDE_EXTRA=7;
 const SEEK_DENSITY=.28; // 찾는 쪽 판 상자 밀도(칸 수에 곱함). 숨는 쪽은 .42(미끼 적당). 찾는 쪽은 눈으로 쫓을 수 있게 적게(약 15개)
  // 숨는 쪽 제한 시간 덤(초). v12 플레이: 30초는 약간 부족, 너무 주면 널널
@@ -136,7 +137,8 @@ const floor=new THREE.Mesh(new THREE.PlaneGeometry(200,120),M('#cfc8b8'));floor.
 let custom=null;try{custom=localStorage.getItem('box-custom');}catch(e){}
 const mapList=()=>FEAT.special?[...Object.entries(MAPS).map(([k,v])=>({k,name:v.name,str:v.str})),...(custom&&FEAT.editor?[{k:'custom',name:'내 맵',str:custom}]:[])]:[{k:'plain',name:MAPS.plain.name,str:MAPS.plain.str}];
 let curKey=FEAT.special?'basic':'plain',diffKey='normal';try{if(FEAT.diff)diffKey=localStorage.getItem('box-diff')||'normal';}catch(e){}
-const wopt=()=>({diff:diffKey,colors:FEAT.colors});
+const wopt=()=>({diff:diffKey,colors:FEAT.colors,beltStop:FEAT.stop});
+const sigDiff=()=>FEAT.stop?Object.assign({},DIFF[diffKey],{yellow:0}):DIFF[diffKey]; // 시험 갈래는 예고 없이 바로 빨강
 const curEntry=()=>mapList().find(m=>m.k===curKey)||mapList()[0];
 
 // ---------- 칸 그리기 ----------
@@ -232,16 +234,16 @@ function saveRecord(r){records.unshift(r);records=records.slice(0,30);try{localS
 
 // ---------- 시작/메뉴/끝 ----------
 // 터치 기기 무대 위 버튼(일시정지·돌아보기·밀기 안내). m=null이면 모두 숨김
-function touchUi(m){$('tPause').hidden=true;$('tLook').hidden=m!=='seek';$('tHint').hidden=m!=='hide';}
+function touchUi(m){$('tPause').hidden=true;if(FEAT.stop)$('tHintTxt').textContent='누르고 있으면 가고, 떼면 멈춤 · 누른 채로 위·아래로 밀면 레일 이동';$('tLook').hidden=m!=='seek';$('tHint').hidden=m!=='hide';}
 const coarse=()=>typeof matchMedia==='function'&&matchMedia('(pointer:coarse)').matches;
 // 폰: 판을 시작할 때 전체 화면 + 가로 고정 시도(안드로이드). 아이폰은 둘 다 안 돼서 세로면 가림막만 뜬다
 function goFull(){if(!coarse())return;try{const d=document.documentElement;if(!document.fullscreenElement&&d.requestFullscreen)d.requestFullscreen().then(()=>{try{screen.orientation.lock('landscape').catch(()=>{});}catch(e){}},()=>{});}catch(e){}}
 // 제한 시간: 맵 하나(v12)일 땐 사용자가 맞춘 값(숨기 30+HIDE_EXTRA초, 찾기 60초) 그대로, 특수 칸 맵을 켜면 맵별 보정
 function start(m){goFull();mode=m;over=false;paused=false;newWorld();
-  const D=DIFF[diffKey];const base=calibrate(curEntry().str,{colors:FEAT.colors});goal=STAMPS;time=FEAT.special?(m==='hide'?Math.max(30,Math.round(base*D.slack))+HIDE_EXTRA:Math.max(60,Math.round(base*2.6))):(m==='hide'?30+HIDE_EXTRA:60);scans=6;found=0;escaped=0;fakes=FEAT.fake?2:0;sig=signalAI(DIFF[diffKey]);world.setLight('green');t0=performance.now();clearStamps();
+  const D=DIFF[diffKey];const base=calibrate(curEntry().str,{colors:FEAT.colors});goal=STAMPS;time=FEAT.special?(m==='hide'?Math.max(30,Math.round(base*D.slack))+HIDE_EXTRA:Math.max(60,Math.round(base*2.6))):(m==='hide'?30+HIDE_EXTRA:60);scans=6;found=0;escaped=0;fakes=FEAT.fake?2:0;sig=signalAI(sigDiff());world.setLight('green');t0=performance.now();clearStamps();
   hunt={t:2,target:null,aim:0,scans:15,stun:0};bots=[];hideMarks();player=null;rec=m==='hide'?{wins:[],cur:null,ps:world.t}:null;
   if(world.boxes.length<4){curKey='basic';menu();say('이 맵은 상자가 돌 자리가 부족해요');return;}
-  if(m==='hide'){player=world.add('player')||world.boxes[0];player.kind='player';player.mul=1;player.got=0;placeStamp(player);[meArrow,worker].forEach(o=>o.visible=true);}
+  if(m==='hide'){player=world.add('player')||world.boxes[0];player.kind='player';player.mul=1;player.got=0;player.go=!FEAT.stop;placeStamp(player);[meArrow,worker].forEach(o=>o.visible=true);}
   else{const pers=['rush','careful','mimic'];for(let i=0;i<3;i++){const b=world.boxes[i];b.kind='bot';b.pers=pers[i];b.got=0;placeStamp(b);bots.push(b);}}
   $('panel').hidden=true;$('susWrap').hidden=m!=='hide';$('hideTools').hidden=m!=='hide';$('seekTools').hidden=m!=='seek';$('editTools').hidden=true;$('timeWrap').hidden=false;$('pauseBtn').hidden=false;touchUi(m);
   document.querySelectorAll('[data-hop]').forEach(b=>b.hidden=!FEAT.speed&&(+b.dataset.hop%2===0));$('fakeBtn').hidden=!FEAT.fake;
@@ -255,8 +257,10 @@ function menu(view){mode=null;over=true;paused=false;hideMarks();touchUi(null);c
   const touch=coarse();
   $('panelBox').innerHTML=`<h1>택배 숨바꼭질</h1>
   <p><b>무궁화 꽃이 피었습니다.</b> 왼쪽 신호등이 초록이면 직원이 등을 돌린 것. 그동안 상자들은 ${FEAT.colors?'각자 자기 라벨 색 레일(양옆 색 띠) 쪽으로':'여기저기 옆 레일로'} 덜컹 옮겨 간다. 노랑이면 돌아보는 중, 빨강이면 보고 있다. 빨강 순간 레일 사이에 걸쳐 있${FEAT.speed?'거나 속도를 바꾸던':'던'} 상자, 빨강 중에 움직인 상자는 머리 위에 빨간 <b>!</b>가 뜬다.</p>
-  <div class="keys"><b>숨는 쪽</b> · 분홍 화살표가 나. 제한 시간 안에 금색 도장 칸 4개를 차례로 지나가면 승리(하나 찍으면 다음 도장이 다른 레일에 뜬다). 일반 상자는 도장에 관심이 없으니, 도장 레일로 옮겨 가는 순간이 위험하다. ${touch?'화면을 위·아래로 밀면':'<kbd>↑</kbd><kbd>↓</kbd>(W·S)로'} 옆 레일로 넘어간다(약 0.4초).${FEAT.speed?' 진행 방향키 = 빠르게, 반대 = 느리게.':''} 직원은 도장 근처에 상자가 있으면 더 자주 돌아본다.${FEAT.fake?' <kbd>C</kbd> 걸린 척(스캔 빗나감)':''}<br>
-  <b>찾는 쪽</b> · 숨은 셋도 각자 도장 4개를 노린다. 금색 도장 근처를 지켜보다 ${touch?'<b>돌아보기</b> 버튼':'<kbd>Space</kbd>'}로 신호를 건다(노랑 → 빨강 2.5초). <b>!</b>가 뜬 상자를 ${touch?'한 번 눌러 고르고, 한 번 더 눌러':'노란 고리로 골라 클릭'} 스캔(언제든, 6번, 틀리면 −5초). 진짜 상자도 가끔 늦게 걸린다.${FEAT.pin?' 우클릭 핀':''}${touch?'':' · <kbd>Esc</kbd> 일시정지'}</div>
+  ${FEAT.stop?`<div class="keys"><b>시험 갈래: 벨트 정지</b> · 직원이 돌아보면(빨강) 벨트가 바로 서고, 일반 상자도 0.2초쯤 밀리다 선다. 사람 상자는 벨트와 상관없이 누르고 있을 때만 간다.<br>
+  <b>숨는 쪽</b> · 분홍 화살표가 나. ${touch?'화면을 누르고 있으면':'<kbd>Space</kbd>를 누르고 있으면'} 벨트를 따라 가고, 떼면 멈춘다. 빨강이 0.3초 지났는데 아직 가고 있으면 걸린다(!). 그렇다고 벨트가 도는데 혼자 서 있으면 직원 눈에 띈다. 금색 도장 4개를 차례로 지나가면 승리. ${touch?'누른 채로 위·아래로 밀면':'<kbd>↑</kbd><kbd>↓</kbd>로'} 옆 레일.<br>
+  <b>찾는 쪽</b> · ${touch?'<b>돌아보기</b>':'<kbd>Space</kbd>'}를 누르면 벨트가 바로 선다. 벨트가 섰는데 늦게까지 밀려가는 상자(!), 다시 돌 때 늦게 출발하는 상자, 벨트가 도는데 혼자 서 있는 상자가 사람이다. ${touch?'한 번 눌러 고르고 한 번 더 눌러':'클릭으로'} 스캔(6번, 틀리면 −5초).</div>`:`<div class="keys"><b>숨는 쪽</b> · 분홍 화살표가 나. 제한 시간 안에 금색 도장 칸 4개를 차례로 지나가면 승리(하나 찍으면 다음 도장이 다른 레일에 뜬다). 일반 상자는 도장에 관심이 없으니, 도장 레일로 옮겨 가는 순간이 위험하다. ${touch?'화면을 위·아래로 밀면':'<kbd>↑</kbd><kbd>↓</kbd>(W·S)로'} 옆 레일로 넘어간다(약 0.4초).${FEAT.speed?' 진행 방향키 = 빠르게, 반대 = 느리게.':''} 직원은 도장 근처에 상자가 있으면 더 자주 돌아본다.${FEAT.fake?' <kbd>C</kbd> 걸린 척(스캔 빗나감)':''}<br>
+  <b>찾는 쪽</b> · 숨은 셋도 각자 도장 4개를 노린다. 금색 도장 근처를 지켜보다 ${touch?'<b>돌아보기</b> 버튼':'<kbd>Space</kbd>'}로 신호를 건다(노랑 → 빨강 2.5초). <b>!</b>가 뜬 상자를 ${touch?'한 번 눌러 고르고, 한 번 더 눌러':'노란 고리로 골라 클릭'} 스캔(언제든, 6번, 틀리면 −5초). 진짜 상자도 가끔 늦게 걸린다.${FEAT.pin?' 우클릭 핀':''}${touch?'':' · <kbd>Esc</kbd> 일시정지'}</div>`}
   ${FEAT.special||FEAT.diff?`<div class="row">${FEAT.special?`<label for="mapSel">맵</label><select id="mapSel">${opts}</select>`:''}${FEAT.diff?`<label for="diffSel">난이도</label><select id="diffSel">${dopts}</select>`:''}</div>`:''}
   <h2>AI와 하기</h2><div class="row"><button id="bHide">숨는 쪽</button><button class="alt" id="bSeek">찾는 쪽</button></div><p id="humanNote">${humanNote()}</p>
   <h2>친구와 하기</h2><p>다음 버전에서 붙여요. 같은 링크를 연 사람끼리 한 명은 직원, 나머지는 상자.</p>
@@ -276,7 +280,7 @@ function end(win,text,score){if(over)return;over=true;ring.visible=laser.visible
   const d=new Date();saveRecord({date:`${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`,mode,map:curEntry().name,diff:DIFF[diffKey].name,win,detail:text,score:score||0});
   $('panel').hidden=false;$('panelBox').innerHTML=`<h1>${win?'통과':'실패'}</h1><p>${text}</p><div class="row"><button id="again">한 판 더</button><button class="alt" id="swap">반대쪽으로</button><button class="alt" id="toMenu">메뉴로</button>${FEAT.records?'<button class="alt" id="toRec">기록</button>':''}</div>`;
   $('again').onclick=()=>start(mode);$('swap').onclick=()=>start(mode==='hide'?'seek':'hide');$('toMenu').onclick=()=>menu();if(FEAT.records)$('toRec').onclick=()=>menu('records');$('again').focus();}
-function pause(){if(over||!mode||mode==='edit'||paused)return;paused=true;$('panel').hidden=false;
+function pause(){if(over||!mode||mode==='edit'||paused)return;setGo(false);paused=true;$('panel').hidden=false;
   $('panelBox').innerHTML=`<h1>일시정지</h1><div class="row"><button id="resume">계속하기</button><button class="alt" id="restart">처음부터</button><button class="alt" id="quit">메뉴로 나가기</button></div><p>나가면 이번 판은 기록되지 않아요.</p>`;
   $('resume').onclick=resume;$('restart').onclick=()=>start(mode);$('quit').onclick=()=>menu();$('resume').focus();}
 function resume(){paused=false;$('panel').hidden=true;}
@@ -300,9 +304,12 @@ addEventListener('keydown',e=>{if(e.target.tagName==='TEXTAREA'||e.target.tagNam
   if(e.code==='Escape'&&mode&&mode!=='edit'&&!over){paused?resume():pause();return;}
   if(mode==='edit'){if(e.code==='KeyR')rot();if(e.code==='KeyF')flipSide();return;}
   if(paused||over)return;
-  if(mode==='hide'){if(e.code in KD){hideInput(KD[e.code]);e.preventDefault();}if(e.code==='KeyC')fake();}
+  if(mode==='hide'){if(e.code in KD){hideInput(KD[e.code]);e.preventDefault();}if(e.code==='KeyC')fake();if(FEAT.stop&&e.code==='Space'){setGo(true);e.preventDefault();}}
   if(mode==='seek'){if(e.code==='Space'){look();e.preventDefault();}}});
-addEventListener('keyup',e=>keys[e.code]=false);
+addEventListener('keyup',e=>{keys[e.code]=false;if(FEAT.stop&&e.code==='Space')setGo(false);});
+addEventListener('blur',()=>setGo(false));
+// 시험 갈래: 누르고 있으면 감. 바뀔 때마다 기록
+function setGo(on){if(!FEAT.stop||mode!=='hide'||!player)return;if(over||paused)on=false;if(player.go===on)return;player.go=on;recGo(on);if(on)$('tHint').hidden=true;}
 document.querySelectorAll('[data-hop]').forEach(b=>b.onclick=()=>hideInput(+b.dataset.hop));
 $('fakeBtn').onclick=fake;
 // 터치·마우스 끌기: 숨는 쪽 판에서 화면을 22px 넘게 밀면 그 방향으로 입력(누르는 중에 바로 발동, 한 번 밀기 = 한 번)
@@ -316,13 +323,13 @@ function tapMove(e){if(!player||player.pending)return;const r=cv.getBoundingClie
   if(player.d%2===0){if(Math.abs(e.clientY-py)<6)return;hideInput(e.clientY<py?3:1);}else{if(Math.abs(e.clientX-px)<6)return;hideInput(e.clientX<px?2:0);}$('tHint').hidden=true;}
 // 화면 어디서든(버튼 위 제외): 밀면 그 방향, 터치로 톡 누르면 tapMove
 const onBtn=e=>!!(e.target&&e.target.closest&&e.target.closest('button,select,textarea'));
-document.addEventListener('pointerdown',e=>{if(mode!=='hide'||over||paused||onBtn(e))return;swipe={id:e.pointerId,x:e.clientX,y:e.clientY,done:false,touch:e.pointerType&&e.pointerType!=='mouse'};});
+document.addEventListener('pointerdown',e=>{if(mode!=='hide'||over||paused||onBtn(e))return;if(FEAT.stop&&e.pointerType!=='mouse')setGo(true);swipe={id:e.pointerId,x:e.clientX,y:e.clientY,done:false,touch:e.pointerType&&e.pointerType!=='mouse'};});
 document.addEventListener('pointermove',e=>{if(mode==='hide')swipeCheck(e);});
-document.addEventListener('pointerup',e=>{if(mode==='hide'&&swipe&&e.pointerId===swipe.id){swipeCheck(e);if(!swipe.done&&swipe.touch&&!over&&!paused)tapMove(e);}swipe=null;});
-document.addEventListener('pointercancel',()=>swipe=null);
+document.addEventListener('pointerup',e=>{if(mode==='hide'&&swipe&&e.pointerId===swipe.id){swipeCheck(e);if(!swipe.done&&swipe.touch&&!over&&!paused&&!FEAT.stop)tapMove(e);}if(FEAT.stop&&e.pointerType!=='mouse')setGo(false);swipe=null;});
+document.addEventListener('pointercancel',()=>{swipe=null;setGo(false);});
 
 // ---------- 찾는 쪽 ----------
-function seekSignal(dt){const D=DIFF[diffKey];if(world.light==='yellow'&&world.lightT>=D.yellow)world.setLight('red');else if(world.light==='red'&&world.lightT>=2.5)world.setLight('green');}
+function seekSignal(dt){const D=sigDiff();if(world.light==='yellow'&&world.lightT>=D.yellow)world.setLight('red');else if(world.light==='red'&&world.lightT>=2.5)world.setLight('green');}
 function look(){if(mode!=='seek'||over||paused||world.light!=='green'||world.lightT<1)return;world.setLight('yellow');}
 $('lookBtn').onclick=look;$('tLook').onclick=look;
 const ray=new THREE.Raycaster(),ndc=new THREE.Vector2();
@@ -347,20 +354,23 @@ function checkSeekEnd(){if(over)return;if(found+escaped>=3)end(found===3,`찾음
 // 숨는 쪽 판에서 내 입력을 신호 기준으로 남긴다. 초록 한 번 = 창(window) 하나:
 // {need: 판 시작 때 도장까지 남은 줄 수(0,1,2=2 이상), g: 그 초록의 길이(초), hops: [{ph: 'g'|'y'|'r' 옮긴 순간의 신호, t: 그 신호가 켜진 뒤 초, dir: 1 도장 쪽, -1 반대쪽, 0 도장 레일 위에서}]}
 // 아무것도 안 한 초록도 창으로 남긴다(사람이 기다린 것도 패턴이다). 판이 끝나면 저장: 아티팩트에선 공유 db(plays), 아니면 이 브라우저.
-const HUMAN_VER=1,HUMAN_MIN=12; // 사람 창이 이만큼 모이면 숨은 AI가 사람 기록을 쓴다
+const HUMAN_VER=FEAT.stop?2:1,HUMAN_MIN=12,HUMAN_KEY=FEAT.stop?'box-human2':'box-human'; // 사람 창이 이만큼 모이면 숨은 AI가 사람 기록을 쓴다
 let rec=null,humanPlays=[],humanSrc='none',DB=null;
 const needOf=b=>b&&b.stamp?Math.min(2,Math.abs(b.stamp[1]-b.cy)):0;
 function recLight(s){if(!rec||!player)return;const now=world.t;
   if(rec.cur&&rec.cur.ph==='g'&&s!=='green')rec.cur.g=+(now-rec.cur.t0).toFixed(2);
-  if(s==='green'){recClose();rec.cur={need:needOf(player),g:0,hops:[],t0:now,ph:'g'};}else if(rec.cur)rec.cur.ph=s;rec.ps=now;}
+  if(s==='green'){recClose();rec.cur={need:needOf(player),g:0,hops:[],t0:now,ph:'g',go:FEAT.stop?{p:player.go?0:null,pre:null,s:null}:null};}else if(rec.cur)rec.cur.ph=s;rec.ps=now;}
 function recHop(dir){if(!rec||!rec.cur)return;rec.cur.hops.push({ph:world.light==='green'?'g':world.light==='yellow'?'y':'r',t:+(world.t-rec.ps).toFixed(2),dir});}
-function recClose(){if(rec&&rec.cur){const c=rec.cur;if(!c.g)c.g=+(world.t-c.t0).toFixed(2);rec.wins.push({need:c.need,g:c.g,hops:c.hops});rec.cur=null;}}
+// 시험 갈래 창의 go: p 초록에 누른 시각, pre 초록 중 미리 뗀 시각, s 빨강이 된 뒤 뗀 시각(빨강 전에 이미 뗐으면 null)
+function recGo(on){if(!rec||!rec.cur||!rec.cur.go)return;const g=rec.cur.go,t=+(world.t-rec.ps).toFixed(2);
+  if(world.light==='green'){if(on&&g.p==null)g.p=t;else if(!on&&g.p!=null&&g.pre==null)g.pre=t;}else if(world.light==='red'&&!on&&g.s==null)g.s=t;}
+function recClose(){if(rec&&rec.cur){const c=rec.cur;if(!c.g)c.g=+(world.t-c.t0).toFixed(2);rec.wins.push(c.go?{need:c.need,g:c.g,hops:c.hops,go:c.go}:{need:c.need,g:c.g,hops:c.hops});rec.cur=null;}}
 function recSave(win){if(!rec)return;recClose();const play={v:HUMAN_VER,at:Date.now(),map:curKey,win:!!win,got:player?player.got||0:0,wins:rec.wins.slice(0,60)};rec=null;if(!play.wins.length)return;
   humanPlays.unshift(play);humanPlays=humanPlays.slice(0,80);
-  try{const L=JSON.parse(localStorage.getItem('box-human')||'[]');L.unshift(play);localStorage.setItem('box-human',JSON.stringify(L.slice(0,40)));}catch(e){}
+  try{const L=JSON.parse(localStorage.getItem(HUMAN_KEY)||'[]');L.unshift(play);localStorage.setItem(HUMAN_KEY,JSON.stringify(L.slice(0,40)));}catch(e){}
   if(DB){DB.collection('plays').add(play).catch(()=>{});}}
 const humanWins=()=>humanPlays.flatMap(p=>Array.isArray(p.wins)?p.wins:[]).filter(w=>w&&Array.isArray(w.hops));
-try{const L=JSON.parse(localStorage.getItem('box-human')||'[]');if(Array.isArray(L)&&L.length){humanPlays=L;humanSrc='local';}}catch(e){}
+try{const L=JSON.parse(localStorage.getItem(HUMAN_KEY)||'[]');if(Array.isArray(L)&&L.length){humanPlays=L;humanSrc='local';}}catch(e){}
 // 아티팩트로 열었을 때: 공유 db에서 최근 기록을 읽는다(10초 안에 답 없으면 이 브라우저 기록만)
 (async()=>{try{const c=window.claude;if(!c||!c.use)return;const db=await c.use('db');if(!db)return;DB=db;
   const q=await Promise.race([db.collection('plays').orderBy('at','desc').limit(80).get(),new Promise((_,r)=>setTimeout(()=>r(0),10000))]);
@@ -384,11 +394,19 @@ function pickWin(b){const need=needOf(b),pool=humanWins();
   b.src='synth';return synthWin(b.pers,need,1-Math.max(0,time)/Math.max(1,b.T0||150));}
 // 사람이 노랑을 늦게 알아챈 시간: 기록에 노랑 중 움직임이 있으면 거기서, 없으면 성격값
 function reactOf(b){const ys=humanWins().flatMap(w=>w.hops).filter(h=>h.ph==='y');return ys.length&&b.src==='human'?ys[(Math.random()*ys.length)|0].t:PERS[b.pers].react*DIFF[diffKey].k;}
-function botPlan(b){const w=pickWin(b);b.plan=(w.hops||[]).slice().sort((x,y)=>'gyr'.indexOf(x.ph)-'gyr'.indexOf(y.ph)||x.t-y.t);b.pi=0;b.react=reactOf(b);}
+// 시험 갈래: 숨은 AI가 언제 누르고 떼나. 사람 창에 go가 있으면 그것, 없으면 성격별 기본(사람 반응 0.15~0.45초)
+function goPlan(b,w){const g=w&&w.go;if(g&&b.src==='human')return {p:g.p,pre:g.pre,s:g.s==null?rnd(.18,.34):g.s};
+  if(b.pers==='rush')return {p:rnd(.12,.3),pre:chance(.1)?rnd(1.5,3):null,s:rnd(.2,.42)};
+  if(b.pers==='careful')return {p:rnd(.25,.5),pre:chance(.5)?rnd(.9,2):null,s:rnd(.15,.3)};
+  return {p:rnd(.05,.22),pre:null,s:rnd(.1,.28)};}
+function botGo(b){if(!FEAT.stop||!b.gp)return;const L=world.light,lt=world.lightT,g=b.gp;
+  if(L==='green')b.go=g.p!=null&&lt>=g.p&&!(g.pre!=null&&lt>=g.pre);
+  else if(L==='red'&&b.go&&lt>=g.s)b.go=false;}
+function botPlan(b){const w=pickWin(b);b.gp=goPlan(b,w);b.plan=(w.hops||[]).slice().sort((x,y)=>'gyr'.indexOf(x.ph)-'gyr'.indexOf(y.ph)||x.t-y.t);b.pi=0;b.react=reactOf(b);}
 function botHop(b,dir){const sd=stampDir(world,b,b.stamp);let h=-1;
   if(dir===1)h=sd;else if(dir===-1)h=sd>=0?(sd+2)%4:world.randSide(b);else h=world.randSide(b);
   if(h>=0)world.hop(b,h);b.pi++;}
-function botThink(b,dt){if(b.found||b.gone||b.pending)return;if(!b.plan)botPlan(b);if(world.midMove(b))return;
+function botThink(b,dt){if(b.found||b.gone||b.pending)return;if(!b.plan)botPlan(b);botGo(b);if(world.midMove(b))return;
   const hp=b.plan[b.pi];if(!hp)return;const L=world.light,lt=world.lightT;
   if(hp.ph==='g'){if(L==='green'){if(lt>=hp.t)botHop(b,hp.dir);}
     else if(L==='yellow'&&lt<b.react)botHop(b,hp.dir); // 노랑을 아직 못 봤다
@@ -449,7 +467,8 @@ function frame(now){const dt=Math.min(.05,(now-last)/1000);last=now;
     if(live){time-=dt;
       if(FEAT.speed&&mode==='hide'&&player&&!player.pending){let k=0;Object.keys(KD).forEach(code=>{if(keys[code]){const h=KD[code];if(h===player.d)k=1;else if(h===(player.d+2)%4)k=-1;}});
         player.mul=k>0?1.45:k<0?.6:1;if(k&&world.light==='red')sus(player,dt*3);}
-      if(mode==='seek')bots.forEach(b=>{if(!b.T0)b.T0=time;botThink(b,dt);});}
+      if(mode==='seek')bots.forEach(b=>{if(!b.T0)b.T0=time;botThink(b,dt);});
+      if(FEAT.stop&&mode==='hide'&&player&&!player.pending&&!player.go&&world.light==='green'&&world.lightT>.5&&player.follow>.6)sus(player,dt*.8);} // 벨트가 도는데 혼자 서 있음
     if(live&&mode==='hide'){sig(world,dt);
       const s=player.stamp;if(s&&world.light==='green'&&world.lightT>.6&&world.boxes.some(b=>!b.gone&&!b.pending&&Math.abs(b.cx-s[0])<=1&&Math.abs(b.cy-s[1])<=1)&&Math.random()<dt*.9)world.setLight('yellow');}
     else if(live&&mode==='seek')seekSignal(dt);else if(!live)idleSig(world,dt);
@@ -460,7 +479,7 @@ function frame(now){const dt=Math.min(.05,(now-last)/1000);last=now;
     world.step(dt);
     world.events.forEach(ev=>{
       if(ev.type==='thud'){const m=meshes.get(ev.b);if(m)m.bump=.3;if(ev.off)alertOn(ev.b);if(live&&mode==='hide'&&ev.off)sus(ev.b,3.6);}
-      if(ev.type==='frozen'){alertOn(ev.b);if(live&&mode==='hide'){sus(ev.b,3.2);if(ev.b===player)say('넘어가다 걸렸다!',1.2);}}
+      if(ev.type==='frozen'){alertOn(ev.b);if(live&&mode==='hide'){sus(ev.b,3.2);if(ev.b===player)say(ev.late?'늦게 멈췄다!':'넘어가다 걸렸다!',1.2);}}
       if(ev.type==='light'){if(ev.s==='green')alertsOff();if(live&&mode==='hide')recLight(ev.s);if(live&&mode==='seek'&&ev.s==='green')bots.forEach(b=>{if(!b.found&&!b.gone)botPlan(b);});}});
 
 

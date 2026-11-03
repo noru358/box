@@ -73,8 +73,13 @@ try {
   {
     const B = global.__box, p = B.player, cy0 = p.cy, up = cy0 > 1, c = global.document;
     const e1 = { pointerId: 8, pointerType: 'touch', button: 0, clientX: 300, clientY: up ? 120 : 420 };
+    if (B.FEAT.stop) {
+      c.fire('pointerdown', e1); const held = p.go; c.fire('pointerup', e1);
+      ok(held === true && p.go === false && p.cy === cy0, `누르고 있으면 감(${held}), 떼면 멈춤(${p.go}), 톡 눌러도 레일은 안 바뀜`);
+    } else {
     c.fire('pointerdown', e1); c.fire('pointerup', e1);
     ok(p.cy === cy0 + (up ? -1 : 1), `톡 누르기: 내 상자보다 ${up ? '위' : '아래'}를 누르면 그쪽 레일로 (${cy0}→${p.cy})`);
+    }
     ready();
     const cy1 = p.cy, e2 = { pointerId: 9, pointerType: 'mouse', button: 0, clientX: 300, clientY: up ? 420 : 120 };
     c.fire('pointerdown', e2); c.fire('pointerup', e2);
