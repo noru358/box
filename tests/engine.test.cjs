@@ -119,5 +119,16 @@ for (const k of Object.keys(E.MAPS)) for (const colors of [true, false]) {
   ok(done, '터널 시험 상황을 만들었다');
 }
 
+// 11. 세로 레일(맵 만들기 대비): 분기 칸·터널이 위아래로 흐르는 레일에서도 똑같이 동작
+{
+  const rows = ['.. Iv Iv ..', '.. nv nv ..', '.. Wv Wv ..', '.. nv nv ..', '.. Uv Uv ..', '.. Uv Uv ..', '.. nv nv ..', '.. Xv0 Xv0 ..'];
+  const str = rows.join('/');
+  ok(E.mapToStr(E.parseMap(str)) === E.mapToStr(E.parseMap(E.mapToStr(E.parseMap(str)))), '세로 맵: 공유 문자열 왕복(분기 W, 터널 U)');
+  const w = E.createWorld(str, { colors: false }); for (let i = 0; i < 5; i++) w.add('npc');
+  const sig = E.signalAI(E.DIFF.normal); let sw = 0, tun = 0, other = 0, del = 0;
+  for (let i = 0; i < 30 * 120; i++) { sig(w, 1 / 30); w.step(1 / 30); for (const e of w.events) { if (e.type === 'thud') { if (e.tun) tun++; else if (e.sw) sw++; else other++; } if (e.type === 'deliver') del++; } w.events = []; }
+  ok(del > 20 && sw > 5 && other < sw, `세로 맵: 출고 ${del}, 분기 칸 넘어가기 ${sw}, 터널 안 ${tun}, 그 밖(미끼) ${other}`);
+}
+
 console.log(failed ? `\n${failed}개 실패` : '\n엔진 테스트 전부 통과');
 process.exit(failed ? 1 : 0);

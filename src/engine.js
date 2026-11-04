@@ -8,8 +8,8 @@ const WANDER=.45;
 // 분기 칸(v12-switch): 'W' 기호. 일반 상자는 분기 칸에서만 옆 레일로 간다(지날 때 SW_P 확률, 초록일 때).
 // 미끼: 분기 칸 바로 앞뒤 칸에서 SW_BAIT 확률로 넘어가는 일반 상자도 있다. 사람은 어디서든 넘어갈 수 있지만 분기 칸이 아니면 티가 난다.
 const SW_P=.55,SW_BAIT=.06;
-// 터널: 'U' 기호. 덮개 아래라 찾는 쪽에게 안 보인다. 터널 안에서 터널 안으로 넘어가면 안 보이고 걸리지도 않는다. 일반 상자도 터널 칸마다 TUN_P 확률로 안에서 갈아탄다.
-const TUN_P=.3; // 색 끔일 때 일반 상자가 초록에 옆으로 옮기는 빈도(초당, 한 초록에 한 번까지)
+// 터널: 'U' 기호. 덮개 아래라 찾는 쪽에게 안 보인다. 터널 안에서 터널 안으로 넘어가면 안 보이고 걸리지도 않는다. 일반 상자도 터널을 지날 때 TUN_P 확률로 한 번 안에서 갈아탄다(나온 줄이 바뀐 게 확실한 증거가 되지 않게).
+const TUN_P=.12; // 터널을 한 번 지날 때 안에서 갈아탈 확률(칸마다가 아니라 한 번) // 색 끔일 때 일반 상자가 초록에 옆으로 옮기는 빈도(초당, 한 초록에 한 번까지)
 const DIFF={easy:{name:'쉬움',yellow:.65,late:.35,green:[1.6,4.2],red:[1.4,2.4],fake:.12,aim:1.0,slack:1.6,k:1.4},normal:{name:'보통',yellow:.45,late:.22,green:[1.0,3.8],red:[1.6,2.8],fake:.2,aim:.75,slack:1.25,k:1},hard:{name:'어려움',yellow:.3,late:.12,green:[.6,3.4],red:[1.8,3.2],fake:.3,aim:.55,slack:1.0,k:.7}};
 function laneMap(rows,bars){const W=14,g=[Array(W).fill('..')];
   rows.forEach(r=>{const t=Array(W).fill(r.sp+r.d);const right=r.d==='>';t[right?0:W-1]='I'+r.d;t[right?W-1:0]='X'+r.d+r.c;bars.forEach(c=>t[c]='S'+r.d);Object.entries(r.ex||{}).forEach(([k,v])=>t[+k]=v);g.push(t);});
@@ -103,8 +103,8 @@ function createWorld(str,opt){opt=opt||{};const rng=opt.rng||Math.random;const {
     // NPC: 초록일 때 흩어져서 한 줄, 노랑일 땐 아주 가끔 늦게(=걸릴 수 있음)
     const rate=(w.light==='green'?(colorsOn?1.3:WANDER):w.light==='yellow'?w.diff.late:0);
     // 분기 칸 맵: 일반 상자는 분기 칸(과 미끼 자리)에 들어선 직후 한 번만 정한다. 노랑이면 아주 가끔 늦게(late).
-    if(w.hasSwitches)for(const b of w.boxes){if(b.kind!=='npc'||b.gone||b.pending||w.midMove(b)||b.s>.5)continue;const key=b.cx+','+b.cy;if(b.swKey===key)continue;
-      if(w.isTunnel(b.cx,b.cy)){b.swKey=key;if(rng()<TUN_P){const h=w.tunSide(b);if(h>=0)w.hop(b,h);}continue;} // 터널 안: 신호와 상관없이 가끔 갈아탐
+    if(w.hasSwitches)for(const b of w.boxes){if(b.kind!=='npc'||b.gone||b.pending||w.midMove(b))continue;if(b.tunPass&&!w.isTunnel(b.cx,b.cy))b.tunPass=false;if(b.s>.5)continue;const key=b.cx+','+b.cy;if(b.swKey===key)continue;
+      if(w.isTunnel(b.cx,b.cy)){b.swKey=key;if(!b.tunPass){b.tunPass=true;if(rng()<TUN_P){const h=w.tunSide(b);if(h>=0)w.hop(b,h);}}continue;} // 터널 안: 신호와 상관없이 가끔 갈아탐
       const sw=w.isSwitch(b.cx,b.cy),bait=!sw&&w.nearSwitch(b.cx,b.cy);if(!sw&&!bait)continue;b.swKey=key;
       const ok=w.light==='green'||(w.light==='yellow'&&rng()<w.diff.late);if(ok&&rng()<(sw?SW_P:SW_BAIT)){const h=w.randSide(b);if(h>=0)w.hop(b,h);}}
     if(rate>0&&!w.hasSwitches)for(const b of w.boxes){if(b.kind!=='npc'||b.gone||b.pending||w.midMove(b)||b.lastWin===w.win)continue;if(rng()<dt*rate){const h=colorsOn?w.bestSide(b,b.cx,b.cy):w.randSide(b);if(h>=0)w.hop(b,h);}}

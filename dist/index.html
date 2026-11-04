@@ -123,8 +123,8 @@ const WANDER=.45;
 // 분기 칸(v12-switch): 'W' 기호. 일반 상자는 분기 칸에서만 옆 레일로 간다(지날 때 SW_P 확률, 초록일 때).
 // 미끼: 분기 칸 바로 앞뒤 칸에서 SW_BAIT 확률로 넘어가는 일반 상자도 있다. 사람은 어디서든 넘어갈 수 있지만 분기 칸이 아니면 티가 난다.
 const SW_P=.55,SW_BAIT=.06;
-// 터널: 'U' 기호. 덮개 아래라 찾는 쪽에게 안 보인다. 터널 안에서 터널 안으로 넘어가면 안 보이고 걸리지도 않는다. 일반 상자도 터널 칸마다 TUN_P 확률로 안에서 갈아탄다.
-const TUN_P=.3; // 색 끔일 때 일반 상자가 초록에 옆으로 옮기는 빈도(초당, 한 초록에 한 번까지)
+// 터널: 'U' 기호. 덮개 아래라 찾는 쪽에게 안 보인다. 터널 안에서 터널 안으로 넘어가면 안 보이고 걸리지도 않는다. 일반 상자도 터널을 지날 때 TUN_P 확률로 한 번 안에서 갈아탄다(나온 줄이 바뀐 게 확실한 증거가 되지 않게).
+const TUN_P=.12; // 터널을 한 번 지날 때 안에서 갈아탈 확률(칸마다가 아니라 한 번) // 색 끔일 때 일반 상자가 초록에 옆으로 옮기는 빈도(초당, 한 초록에 한 번까지)
 const DIFF={easy:{name:'쉬움',yellow:.65,late:.35,green:[1.6,4.2],red:[1.4,2.4],fake:.12,aim:1.0,slack:1.6,k:1.4},normal:{name:'보통',yellow:.45,late:.22,green:[1.0,3.8],red:[1.6,2.8],fake:.2,aim:.75,slack:1.25,k:1},hard:{name:'어려움',yellow:.3,late:.12,green:[.6,3.4],red:[1.8,3.2],fake:.3,aim:.55,slack:1.0,k:.7}};
 function laneMap(rows,bars){const W=14,g=[Array(W).fill('..')];
   rows.forEach(r=>{const t=Array(W).fill(r.sp+r.d);const right=r.d==='>';t[right?0:W-1]='I'+r.d;t[right?W-1:0]='X'+r.d+r.c;bars.forEach(c=>t[c]='S'+r.d);Object.entries(r.ex||{}).forEach(([k,v])=>t[+k]=v);g.push(t);});
@@ -218,8 +218,8 @@ function createWorld(str,opt){opt=opt||{};const rng=opt.rng||Math.random;const {
     // NPC: 초록일 때 흩어져서 한 줄, 노랑일 땐 아주 가끔 늦게(=걸릴 수 있음)
     const rate=(w.light==='green'?(colorsOn?1.3:WANDER):w.light==='yellow'?w.diff.late:0);
     // 분기 칸 맵: 일반 상자는 분기 칸(과 미끼 자리)에 들어선 직후 한 번만 정한다. 노랑이면 아주 가끔 늦게(late).
-    if(w.hasSwitches)for(const b of w.boxes){if(b.kind!=='npc'||b.gone||b.pending||w.midMove(b)||b.s>.5)continue;const key=b.cx+','+b.cy;if(b.swKey===key)continue;
-      if(w.isTunnel(b.cx,b.cy)){b.swKey=key;if(rng()<TUN_P){const h=w.tunSide(b);if(h>=0)w.hop(b,h);}continue;} // 터널 안: 신호와 상관없이 가끔 갈아탐
+    if(w.hasSwitches)for(const b of w.boxes){if(b.kind!=='npc'||b.gone||b.pending||w.midMove(b))continue;if(b.tunPass&&!w.isTunnel(b.cx,b.cy))b.tunPass=false;if(b.s>.5)continue;const key=b.cx+','+b.cy;if(b.swKey===key)continue;
+      if(w.isTunnel(b.cx,b.cy)){b.swKey=key;if(!b.tunPass){b.tunPass=true;if(rng()<TUN_P){const h=w.tunSide(b);if(h>=0)w.hop(b,h);}}continue;} // 터널 안: 신호와 상관없이 가끔 갈아탐
       const sw=w.isSwitch(b.cx,b.cy),bait=!sw&&w.nearSwitch(b.cx,b.cy);if(!sw&&!bait)continue;b.swKey=key;
       const ok=w.light==='green'||(w.light==='yellow'&&rng()<w.diff.late);if(ok&&rng()<(sw?SW_P:SW_BAIT)){const h=w.randSide(b);if(h>=0)w.hop(b,h);}}
     if(rate>0&&!w.hasSwitches)for(const b of w.boxes){if(b.kind!=='npc'||b.gone||b.pending||w.midMove(b)||b.lastWin===w.win)continue;if(rng()<dt*rate){const h=colorsOn?w.bestSide(b,b.cx,b.cy):w.randSide(b);if(h>=0)w.hop(b,h);}}
@@ -580,7 +580,8 @@ function huntStep(dt){const p=player,D=DIFF[diffKey];worker.position.z=wz(H-1)+C
 
     hunt.t-=dt;if(world.light==='red'&&hunt.t<=0&&hunt.scans>0){hunt.t=.35;const cand=world.boxes.filter(b=>!b.gone&&!b.pending&&!inTun(b));const top=cand.reduce((a,b)=>b.sus>a.sus?b:a,cand[0]);
       if(top&&top.sus>1.1&&Math.random()<Math.min(.95,(top.sus-.6)/2.4)){hunt.target=top;hunt.aim=D.aim;}}}
-  else{const t=hunt.target;const [tx,ty]=world.pos(t);worker.position.x+=(THREE.MathUtils.clamp(wx(tx),wx(0),wx(W-1))-worker.position.x)*dt*1.5;hunt.aim-=dt;ring.visible=laser.visible=true;ring.position.set(wx(tx),.38,wz(ty));
+  else{const t=hunt.target;if(inTun(t)){ring.visible=laser.visible=false;hunt.target=null;return;} // 덮개 아래로 들어가면 조준 풀림
+    const [tx,ty]=world.pos(t);worker.position.x+=(THREE.MathUtils.clamp(wx(tx),wx(0),wx(W-1))-worker.position.x)*dt*1.5;hunt.aim-=dt;ring.visible=laser.visible=true;ring.position.set(wx(tx),.38,wz(ty));
     laser.geometry.setFromPoints([new THREE.Vector3(worker.position.x,2.4,worker.position.z),new THREE.Vector3(wx(tx),t.size*.8+.33,wz(ty))]);
     if(hunt.aim<=0||t.pending){ring.visible=laser.visible=false;hunt.target=null;if(t.pending)return;hunt.scans--;
       if(t===p&&p.fakeT>0){say('삐— 바코드 인식 실패');hunt.stun=2.5;return;}
@@ -588,7 +589,7 @@ function huntStep(dt){const p=player,D=DIFF[diffKey];worker.position.z=wz(H-1)+C
       say('직원: 아… 그냥 상자네');hunt.stun=3;t.sus=0;}}}
 
 // ---------- 편집기 ----------
-const PAL=[['erase','지우개'],['n','벨트'],['f','빠른 벨트'],['s','느린 벨트'],['J','정체'],['C','재분류'],['X','출고'],['I','입고']];
+const PAL=[['erase','지우개'],['n','벨트'],['f','빠른 벨트'],['s','느린 벨트'],['J','정체'],['C','재분류'],['X','출고'],['I','입고'],['W','분기'],['U','터널']];
 let ed={tool:'n',d:0,side:1,cols:[0],tiles:null,painting:false};
 function openEditor(){mode='edit';over=true;hideMarks();clearStamps();$('panel').hidden=true;['hideTools','seekTools','pauseBtn','timeWrap','susWrap'].forEach(id=>$(id).hidden=true);$('editTools').hidden=false;
   const m=parseMap(curEntry().str);const T=[];for(let y=0;y<8;y++){T.push([]);for(let x=0;x<14;x++)T[y].push((m.tiles[y]||[])[x]||null);}ed.tiles=T;
@@ -601,7 +602,7 @@ $('rotBtn').onclick=rot;$('sideBtn').onclick=flipSide;
 function paintUi(){$('palette').querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.tool===ed.tool));$('rotBtn').textContent=`방향 ${'→↓←↑'[ed.d]} (R)`;
   $('sideBtn').textContent=`옆: ${ed.side===1?'오른쪽':'왼쪽'} (F)`;$('colorPick').querySelectorAll('button').forEach(b=>b.style.outline=ed.cols.includes(+b.dataset.col)?'4px solid #1e1c18':'none');}
 function makeTile(){const d=ed.d,s=(d+ed.side)%4,c=ed.cols[0];switch(ed.tool){case 'erase':return null;case 'n':case 'f':case 's':return {t:'belt',sp:ed.tool,d};
-  case 'S':return {t:'sort',d};case 'T':return {t:'turn',d,s,per:3};case 'J':return {t:'jam',d};case 'C':return {t:'relabel',d,c};case 'X':return {t:'exit',d,c};case 'I':return {t:'spawn',d};}}
+  case 'S':return {t:'sort',d};case 'T':return {t:'turn',d,s,per:3};case 'J':return {t:'jam',d};case 'C':return {t:'relabel',d,c};case 'X':return {t:'exit',d,c};case 'I':return {t:'spawn',d};case 'W':return {t:'belt',sp:'n',d,sw:true};case 'U':return {t:'belt',sp:'n',d,tun:true};}}
 const plane=new THREE.Plane(new THREE.Vector3(0,1,0),0),hp=new THREE.Vector3();
 function cellAt(e){setRay(e);if(!ray.ray.intersectPlane(plane,hp))return null;const x=Math.round(hp.x/CS+(W-1)/2),y=Math.round(hp.z/CS+(H-1)/2);return (x>=0&&y>=0&&x<W&&y<H)?[x,y]:null;}
 function paint(e){const c=cellAt(e);if(!c)return;const [x,y]=c;const nt=makeTile();if(tileToken(ed.tiles[y][x])===tileToken(nt))return;ed.tiles[y][x]=nt;buildTiles(ed.tiles);}
@@ -627,6 +628,8 @@ function frame(now){const dt=Math.min(.05,(now-last)/1000);last=now;
       if(FEAT.speed&&mode==='hide'&&player&&!player.pending){let k=0;Object.keys(KD).forEach(code=>{if(keys[code]){const h=KD[code];if(h===player.d)k=1;else if(h===(player.d+2)%4)k=-1;}});
         player.mul=k>0?1.45:k<0?.6:1;if(k&&world.light==='red')sus(player,dt*3);}
       if(mode==='seek')bots.forEach(b=>{if(!b.T0)b.T0=time;botThink(b,dt);});}
+    // 터널에 들어간 줄과 나온 줄이 다르면 직원이 놓친다: 의심 0
+    if(live&&mode==='hide'&&world.isTunnel)world.boxes.forEach(b=>{if(b.gone||b.pending)return;const it=inTun(b);if(it&&!b.wasTun)b.tunY=b.cy;if(!it&&b.wasTun&&b.tunY!=null&&b.cy!==b.tunY){b.sus=0;if(b===player)say('직원이 놓쳤다',1.2);}b.wasTun=it;});
     if(live&&mode==='hide'&&hopQ&&player&&!world.midMove(player)){const q=hopQ;hopQ=null;if(performance.now()-q.t<300)playerHop(q.h);}
     if(live&&mode==='hide'){sig(world,dt);
       const s=player.stamp;if(s&&world.light==='green'&&world.lightT>.6&&world.boxes.some(b=>!b.gone&&!b.pending&&Math.abs(b.cx-s[0])<=1&&Math.abs(b.cy-s[1])<=1)&&Math.random()<dt*.9)world.setLight('yellow');}
@@ -639,7 +642,7 @@ function frame(now){const dt=Math.min(.05,(now-last)/1000);last=now;
       placeStamp(b);}});
     world.step(dt);
     world.events.forEach(ev=>{
-      if(ev.type==='thud'){const m=meshes.get(ev.b);if(m)m.bump=.3;if(ev.off)alertOn(ev.b);if(live&&mode==='hide'&&ev.off)sus(ev.b,3.6);if(live&&mode==='hide'&&FEAT.switch&&world.hasSwitches&&!ev.off&&!ev.sw)sus(ev.b,1.6);}
+      if(ev.type==='thud'){const m=meshes.get(ev.b);if(m)m.bump=.3;if(ev.off)alertOn(ev.b);if(live&&mode==='hide'&&ev.off)sus(ev.b,3.6);if(live&&mode==='hide'&&FEAT.switch&&world.hasSwitches&&!ev.off&&!ev.sw&&!ev.tun)sus(ev.b,1.6);}
       if(ev.type==='frozen'){alertOn(ev.b);if(live&&mode==='hide'){sus(ev.b,3.2);if(ev.b===player)say('넘어가다 걸렸다!',1.2);}}
       if(ev.type==='light'){if(live)lightSound(ev.s);if(ev.s==='green')alertsOff();if(live&&mode==='hide')recLight(ev.s);if(live&&mode==='seek'&&ev.s==='green')bots.forEach(b=>{if(!b.found&&!b.gone)botPlan(b);});}});
 
