@@ -14,7 +14,15 @@ const DIFF={easy:{name:'쉬움',yellow:.65,late:.35,green:[1.6,4.2],red:[1.4,2.4
 function laneMap(rows,bars){const W=14,g=[Array(W).fill('..')];
   rows.forEach(r=>{const t=Array(W).fill(r.sp+r.d);const right=r.d==='>';t[right?0:W-1]='I'+r.d;t[right?W-1:0]='X'+r.d+r.c;bars.forEach(c=>t[c]='S'+r.d);Object.entries(r.ex||{}).forEach(([k,v])=>t[+k]=v);g.push(t);});
   g.push(Array(W).fill('..'));return g.map(r=>r.join(' ')).join('/');}
+// 굽은 길(v12-switch 시험): 바깥 고리(시계 방향)와 안쪽 고리(반시계) + 가운데 두 줄(입고→출고). 세로로 흐르는 길, 모퉁이, 세로 터널.
+function loopMap(){const W=14,H=8,g=Array.from({length:H},()=>Array(W).fill('..'));const set=(x,y,t)=>{g[y][x]=t;};
+  for(let x=1;x<=11;x++)set(x,1,'n>');set(12,1,'nv');for(let y=2;y<=5;y++)set(12,y,'nv');set(12,6,'n<');for(let x=2;x<=11;x++)set(x,6,'n<');set(1,6,'n^');for(let y=2;y<=5;y++)set(1,y,'n^');
+  for(let x=3;x<=11;x++)set(x,2,'n<');set(2,2,'nv');for(let y=3;y<=4;y++)set(2,y,'nv');set(2,5,'n>');for(let x=3;x<=10;x++)set(x,5,'n>');set(11,5,'n^');for(let y=3;y<=4;y++)set(11,y,'n^');
+  set(3,3,'I>');for(let x=4;x<=9;x++)set(x,3,'n>');set(10,3,'X>0');set(10,4,'I<');for(let x=4;x<=9;x++)set(x,4,'n<');set(3,4,'X<0');
+  [[5,1,'W>'],[9,1,'W>'],[4,6,'W<'],[8,6,'W<'],[6,2,'W<'],[7,5,'W>'],[1,3,'W^'],[2,4,'Wv'],[6,3,'W>'],[7,4,'W<'],[12,3,'Uv'],[12,4,'Uv'],[11,3,'U^'],[11,4,'U^']].forEach(([x,y,t])=>set(x,y,t));
+  return g.map(r=>r.join(' ')).join('/');}
 const MAPS={
+  loop:{name:'굽은 길',str:loopMap()},
   switch:{name:'분기',str:laneMap([{d:'>',sp:'n',c:0,ex:{3:'W>',7:'W>',11:'W>'}},{d:'<',sp:'n',c:1,ex:{5:'W<',9:'W<'}},{d:'>',sp:'n',c:2,ex:{3:'W>',6:'U>',7:'U>',8:'U>',11:'W>'}},{d:'>',sp:'n',c:3,ex:{5:'W>',6:'U>',7:'U>',8:'U>',9:'W>'}}],[])},
   plain:{name:'기본',str:laneMap([{d:'>',sp:'n',c:0},{d:'<',sp:'n',c:1},{d:'>',sp:'n',c:2},{d:'>',sp:'n',c:3}],[])},
   basic:{name:'기본(섞임)',str:laneMap([{d:'>',sp:'n',c:0},{d:'<',sp:'f',c:1},{d:'>',sp:'s',c:2,ex:{6:'J>'}},{d:'>',sp:'n',c:3}],[])},
@@ -134,7 +142,8 @@ function signalAI(diff,rng){rng=rng||Math.random;const r=(a)=>a[0]+rng()*(a[1]-a
 function nextStamp(w,b,rng){rng=rng||Math.random;const c=[];for(let y=0;y<w.H;y++)for(let x=2;x<w.W-2;x++){const t=w.T(x,y);if(t&&t.t==='belt'&&!t.tun&&y!==b.cy)c.push([x,y]);}
   if(!c.length)for(let y=0;y<w.H;y++)for(let x=2;x<w.W-2;x++){const t=w.T(x,y);if(t&&t.t==='belt')c.push([x,y]);}return c.length?c[(rng()*c.length)|0]:null;}
 // 도장 칸 쪽 레일로 옮겨야 하면 그 방향(-1=이미 그 줄이거나 못 감)
-function stampDir(w,b,s){if(!s||s[1]===b.cy)return -1;const h=s[1]>b.cy?1:3;const nt=w.T(b.cx+DX[h],b.cy+DY[h]);return (nt&&nt.t!=='turn'&&nt.t!=='exit'&&h%2!==b.d%2)?h:-1;}
+function stampDir(w,b,s){if(!s)return -1;const t0=w.T(b.cx,b.cy);if(!t0)return -1;let h; // 가로 레일이면 위·아래로, 세로 레일이면 좌·우로 도장 쪽
+  if(t0.d%2===0){if(s[1]===b.cy)return -1;h=s[1]>b.cy?1:3;}else{if(s[0]===b.cx)return -1;h=s[0]>b.cx?0:2;}const nt=w.T(b.cx+DX[h],b.cy+DY[h]);return (nt&&nt.t!=='turn'&&nt.t!=='exit'&&h%2!==b.d%2)?h:-1;}
 const STAMPS=4;
 // 도장을 찍었나: 칸 번호가 아니라 화면에 보이는 위치로 본다. 옆 레일로 넘어가면 칸 번호는 즉시 바뀌지만 화면에선 0.38초 미끄러지므로,
 // 칸 번호로 보면 화면엔 아직 아래 레일에 있는데 도장이 찍히는 일이 생긴다(v12 사용자 지적).

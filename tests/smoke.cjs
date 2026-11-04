@@ -48,7 +48,7 @@ try {
     els.backEd.onclick(); run(5); els.editDone.onclick(); els.edMenu.onclick();
     els.bRec.onclick(); ok(els.panelBox.innerHTML.includes('기록'), '기록 화면'); els.recBack.onclick();
   } else {
-    ok(!els.panelBox.innerHTML.includes('bEdit') && !els.panelBox.innerHTML.includes('bRec') && !els.panelBox.innerHTML.includes('mapSel'), '덜어낸 판: 맵 만들기·기록·맵 선택이 메뉴에 없음');
+    ok(!els.panelBox.innerHTML.includes('bEdit') && !els.panelBox.innerHTML.includes('bRec') && (global.__box.FEAT.switch || !els.panelBox.innerHTML.includes('mapSel')), '덜어낸 판: 맵 만들기·기록이 메뉴에 없음(분기 갈래는 맵 선택 있음)');
   }
 
   // 상자가 옮길 수 있는 상태가 될 때까지(넘어가는 중 아님, 양 끝 출고·입고 칸 아님) 한 프레임씩
