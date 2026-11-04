@@ -7,13 +7,15 @@ const CYCLE=4,ON=1.2,WARN=1;
 const WANDER=.45;
 // 분기 칸(v12-switch): 'W' 기호. 일반 상자는 분기 칸에서만 옆 레일로 간다(지날 때 SW_P 확률, 초록일 때).
 // 미끼: 분기 칸 바로 앞뒤 칸에서 SW_BAIT 확률로 넘어가는 일반 상자도 있다. 사람은 어디서든 넘어갈 수 있지만 분기 칸이 아니면 티가 난다.
-const SW_P=.55,SW_BAIT=.06; // 색 끔일 때 일반 상자가 초록에 옆으로 옮기는 빈도(초당, 한 초록에 한 번까지)
+const SW_P=.55,SW_BAIT=.06;
+// 터널: 'U' 기호. 덮개 아래라 찾는 쪽에게 안 보인다. 터널 안에서 터널 안으로 넘어가면 안 보이고 걸리지도 않는다. 일반 상자도 터널 칸마다 TUN_P 확률로 안에서 갈아탄다.
+const TUN_P=.3; // 색 끔일 때 일반 상자가 초록에 옆으로 옮기는 빈도(초당, 한 초록에 한 번까지)
 const DIFF={easy:{name:'쉬움',yellow:.65,late:.35,green:[1.6,4.2],red:[1.4,2.4],fake:.12,aim:1.0,slack:1.6,k:1.4},normal:{name:'보통',yellow:.45,late:.22,green:[1.0,3.8],red:[1.6,2.8],fake:.2,aim:.75,slack:1.25,k:1},hard:{name:'어려움',yellow:.3,late:.12,green:[.6,3.4],red:[1.8,3.2],fake:.3,aim:.55,slack:1.0,k:.7}};
 function laneMap(rows,bars){const W=14,g=[Array(W).fill('..')];
   rows.forEach(r=>{const t=Array(W).fill(r.sp+r.d);const right=r.d==='>';t[right?0:W-1]='I'+r.d;t[right?W-1:0]='X'+r.d+r.c;bars.forEach(c=>t[c]='S'+r.d);Object.entries(r.ex||{}).forEach(([k,v])=>t[+k]=v);g.push(t);});
   g.push(Array(W).fill('..'));return g.map(r=>r.join(' ')).join('/');}
 const MAPS={
-  switch:{name:'분기',str:laneMap([{d:'>',sp:'n',c:0,ex:{3:'W>',7:'W>',11:'W>'}},{d:'<',sp:'n',c:1,ex:{5:'W<',9:'W<'}},{d:'>',sp:'n',c:2,ex:{3:'W>',7:'W>',11:'W>'}},{d:'>',sp:'n',c:3,ex:{5:'W>',9:'W>'}}],[])},
+  switch:{name:'분기',str:laneMap([{d:'>',sp:'n',c:0,ex:{3:'W>',7:'W>',11:'W>'}},{d:'<',sp:'n',c:1,ex:{5:'W<',9:'W<'}},{d:'>',sp:'n',c:2,ex:{3:'W>',6:'U>',7:'U>',8:'U>',11:'W>'}},{d:'>',sp:'n',c:3,ex:{5:'W>',6:'U>',7:'U>',8:'U>',9:'W>'}}],[])},
   plain:{name:'기본',str:laneMap([{d:'>',sp:'n',c:0},{d:'<',sp:'n',c:1},{d:'>',sp:'n',c:2},{d:'>',sp:'n',c:3}],[])},
   basic:{name:'기본(섞임)',str:laneMap([{d:'>',sp:'n',c:0},{d:'<',sp:'f',c:1},{d:'>',sp:'s',c:2,ex:{6:'J>'}},{d:'>',sp:'n',c:3}],[])},
   five:{name:'다섯 줄',str:laneMap([{d:'>',sp:'n',c:0},{d:'>',sp:'f',c:1,ex:{5:'C>3'}},{d:'<',sp:'n',c:2},{d:'>',sp:'s',c:3,ex:{8:'J>'}},{d:'<',sp:'n',c:4,ex:{10:'C<0'}}],[])}
@@ -22,10 +24,11 @@ function parseTile(tok){if(!tok||tok==='..')return null;const t=tok[0],d=DIRS.in
   switch(t){case 'n':case 'f':case 's':return {t:'belt',sp:t,d};
     case 'S':return {t:'belt',sp:'n',d};
     case 'W':return {t:'belt',sp:'n',d,sw:true};
+    case 'U':return {t:'belt',sp:'n',d,tun:true};
     case 'T':{const s=DIRS.indexOf(tok[2]);return s<0?null:{t:'turn',d,s,per:Math.max(1,+tok[3]||2)};}
     case 'J':return {t:'jam',d};case 'C':return {t:'relabel',d,c:Math.min(4,+tok[2]||0)};case 'X':return {t:'exit',d,c:Math.min(4,+tok[2]||0)};
     case 'I':return {t:'spawn',d};case 'G':return {t:'belt',sp:'n',d};}return null;}
-function tileToken(t){if(!t)return '..';const D=DIRS[t.d];switch(t.t){case 'belt':return (t.sw?'W':t.sp)+D;case 'sort':return 'S'+D;case 'turn':return 'T'+D+DIRS[t.s]+t.per;
+function tileToken(t){if(!t)return '..';const D=DIRS[t.d];switch(t.t){case 'belt':return (t.sw?'W':t.tun?'U':t.sp)+D;case 'sort':return 'S'+D;case 'turn':return 'T'+D+DIRS[t.s]+t.per;
   case 'jam':return 'J'+D;case 'relabel':return 'C'+D+t.c;case 'exit':return 'X'+D+t.c;case 'spawn':return 'I'+D;}return '..';}
 function parseMap(str){const rows=str.trim().split('/').map(r=>r.trim().split(/\s+/));const H=rows.length,W=Math.max(...rows.map(r=>r.length));
   return {W,H,tiles:rows.map(r=>Array.from({length:W},(_,x)=>parseTile(r[x])))};}
@@ -56,6 +59,9 @@ function createWorld(str,opt){opt=opt||{};const rng=opt.rng||Math.random;const {
     for(const h of [(t.d+1)%4,(t.d+3)%4]){const nx=x+DX[h],ny=y+DY[h];if(!hopable(T(nx,ny)))continue;const v=w.dist(b.dest,nx,ny);if(v<bd){bd=v;best=h;}}return best;};
   // 색 없이: 넘어갈 수 있는 옆 방향 중 아무거나(-1 = 못 감)
   w.isSwitch=(x,y)=>{const t=T(x,y);return !!(t&&t.sw);};
+  w.isTunnel=(x,y)=>{const t=T(x,y);return !!(t&&t.tun);};
+  // 터널 안에서 터널 안으로 갈 수 있는 옆 방향(-1 = 없음)
+  w.tunSide=b=>{if(!w.isTunnel(b.cx,b.cy))return -1;const d=T(b.cx,b.cy).d;const o=[(d+1)%4,(d+3)%4].filter(h=>w.isTunnel(b.cx+DX[h],b.cy+DY[h]));return o.length?o[(rng()*o.length)|0]:-1;};
   // 분기 칸 바로 앞이나 뒤(같은 레일)인가: 미끼 자리
   w.nearSwitch=(x,y)=>{const t=T(x,y);if(!t||t.sw)return false;return w.isSwitch(x+DX[t.d],y+DY[t.d])||w.isSwitch(x-DX[t.d],y-DY[t.d]);};
   w.hasSwitches=cells.some(([x,y])=>tiles[y][x].sw);
@@ -81,23 +87,24 @@ function createWorld(str,opt){opt=opt||{};const rng=opt.rng||Math.random;const {
     b.d=t.d;}
   // 신호: 초록(등 돌림) → 노랑(돌아보는 중) → 빨강(봄)
   w.setLight=function(s){if(w.light===s)return;w.light=s;w.lightT=0;w.sortOn=s==='green';if(s==='green')w.win++;
-    if(s==='red')for(const b of w.boxes){if(b.gone||b.pending)continue;if(w.midMove(b)||(b.kind!=='npc'&&b.mul!==1))w.events.push({type:'frozen',b,x:w.pos(b)[0],y:w.pos(b)[1]});}
+    if(s==='red')for(const b of w.boxes){if(b.gone||b.pending)continue;if(b.slide&&b.slide.hid)continue;if(w.midMove(b)||(b.kind!=='npc'&&b.mul!==1))w.events.push({type:'frozen',b,x:w.pos(b)[0],y:w.pos(b)[1]});}
     w.events.push({type:'light',s});};
   // 사람 상자의 옆 칸 갈아타기
-  w.thud=function(b,move,sw){const [x,y]=w.pos(b);const off=w.light==='red';if(move)b.lastWin=w.win;w.events.push({type:'thud',b,x,y,off,sw:!!sw});return off;}; // sw: 분기 칸에서 넘어갔나
+  w.thud=function(b,move,sw,tun){const [x,y]=w.pos(b);const off=w.light==='red'&&!tun;if(move)b.lastWin=w.win;w.events.push({type:'thud',b,x,y,off,sw:!!sw,tun:!!tun});return off;}; // sw: 분기 칸에서 넘어갔나
   w.hop=function(b,h){if(b.pending||b.gone||b.slide&&b.slide.t<1)return null;if(h%2===b.d%2)return null;
     const here=tiles[b.cy][b.cx];if(!hopable(here))return null;
     const [px,py]=w.pos(b);const nx=b.cx+DX[h],ny=b.cy+DY[h];const nt=T(nx,ny);if(!hopable(nt))return null;
     const dir2=nt.d;let cx=nx,cy=ny,s=b.s,d=dir2;
     if(dir2===b.d){}else if(dir2===(b.d+2)%4){const fx=nx+DX[b.d],fy=ny+DY[b.d];if(T(fx,fy)){cx=fx;cy=fy;s=1-b.s;}else s=0;}else s=0;
-    const fromSw=w.isSwitch(b.cx,b.cy);
-    b.cx=cx;b.cy=cy;b.s=s;b.d=d;const nb=[cx+DX[d]*s,cy+DY[d]*s];b.slide={ox:px-nb[0],oy:py-nb[1],t:0};
-    return {off:w.thud(b,true,fromSw)};};
+    const fromSw=w.isSwitch(b.cx,b.cy),fromTun=w.isTunnel(b.cx,b.cy);
+    b.cx=cx;b.cy=cy;b.s=s;b.d=d;const nb=[cx+DX[d]*s,cy+DY[d]*s];const hid=fromTun&&w.isTunnel(cx,cy);b.slide={ox:px-nb[0],oy:py-nb[1],t:0,hid};
+    return {off:w.thud(b,true,fromSw,hid)};}; // hid: 터널 안에서 터널 안으로(안 보임)
   w.step=function(dt){w.t+=dt;w.lightT+=dt;
     // NPC: 초록일 때 흩어져서 한 줄, 노랑일 땐 아주 가끔 늦게(=걸릴 수 있음)
     const rate=(w.light==='green'?(colorsOn?1.3:WANDER):w.light==='yellow'?w.diff.late:0);
     // 분기 칸 맵: 일반 상자는 분기 칸(과 미끼 자리)에 들어선 직후 한 번만 정한다. 노랑이면 아주 가끔 늦게(late).
     if(w.hasSwitches)for(const b of w.boxes){if(b.kind!=='npc'||b.gone||b.pending||w.midMove(b)||b.s>.5)continue;const key=b.cx+','+b.cy;if(b.swKey===key)continue;
+      if(w.isTunnel(b.cx,b.cy)){b.swKey=key;if(rng()<TUN_P){const h=w.tunSide(b);if(h>=0)w.hop(b,h);}continue;} // 터널 안: 신호와 상관없이 가끔 갈아탐
       const sw=w.isSwitch(b.cx,b.cy),bait=!sw&&w.nearSwitch(b.cx,b.cy);if(!sw&&!bait)continue;b.swKey=key;
       const ok=w.light==='green'||(w.light==='yellow'&&rng()<w.diff.late);if(ok&&rng()<(sw?SW_P:SW_BAIT)){const h=w.randSide(b);if(h>=0)w.hop(b,h);}}
     if(rate>0&&!w.hasSwitches)for(const b of w.boxes){if(b.kind!=='npc'||b.gone||b.pending||w.midMove(b)||b.lastWin===w.win)continue;if(rng()<dt*rate){const h=colorsOn?w.bestSide(b,b.cx,b.cy):w.randSide(b);if(h>=0)w.hop(b,h);}}
@@ -124,7 +131,7 @@ function signalAI(diff,rng){rng=rng||Math.random;const r=(a)=>a[0]+rng()*(a[1]-a
     else if(w.light==='yellow'){if(w.lightT>=diff.yellow){w.setLight('red');next=r(diff.red);}}
     else if(w.lightT>=next){w.setLight('green');next=rng()<diff.fake?.4+rng()*.5:r(diff.green);}};}
 // 도장: 한 번에 하나씩 켜진다. 다음 도장은 지금 레일과 다른 레일, 가운데 열 중 하나
-function nextStamp(w,b,rng){rng=rng||Math.random;const c=[];for(let y=0;y<w.H;y++)for(let x=2;x<w.W-2;x++){const t=w.T(x,y);if(t&&t.t==='belt'&&y!==b.cy)c.push([x,y]);}
+function nextStamp(w,b,rng){rng=rng||Math.random;const c=[];for(let y=0;y<w.H;y++)for(let x=2;x<w.W-2;x++){const t=w.T(x,y);if(t&&t.t==='belt'&&!t.tun&&y!==b.cy)c.push([x,y]);}
   if(!c.length)for(let y=0;y<w.H;y++)for(let x=2;x<w.W-2;x++){const t=w.T(x,y);if(t&&t.t==='belt')c.push([x,y]);}return c.length?c[(rng()*c.length)|0]:null;}
 // 도장 칸 쪽 레일로 옮겨야 하면 그 방향(-1=이미 그 줄이거나 못 감)
 function stampDir(w,b,s){if(!s||s[1]===b.cy)return -1;const h=s[1]>b.cy?1:3;const nt=w.T(b.cx+DX[h],b.cy+DY[h]);return (nt&&nt.t!=='turn'&&nt.t!=='exit'&&h%2!==b.d%2)?h:-1;}
@@ -137,4 +144,4 @@ const _cal={};function calibrate(str,opt){opt=opt||{};const key=str+'|'+(opt.col
   for(let r=0;r<7;r++){const w=createWorld(str,{rng,colors:opt.colors});const sig=signalAI(DIFF.normal,rng);const n=w.tiles.flat().filter(Boolean).length;for(let i=0;i<Math.round(n*.42);i++)w.add('npc');const p=w.add('player');if(!p)break;
     let got=0,s=nextStamp(w,p,rng),t=0;while(t<300&&got<STAMPS&&s){sig(w,1/20);if(w.light==='green'&&w.lightT>.25&&!w.midMove(p)){const h=stampDir(w,p,s);if(h>=0)w.hop(p,h);}w.step(1/20);w.events=[];t+=1/20;if(onStamp(w,p,s)){got++;s=nextStamp(w,p,rng);}}ts.push(t);}
   ts.sort((a,b)=>a-b);return _cal[key]=ts[(ts.length/2)|0]||90;}
-if(typeof module!=='undefined')module.exports={SW_P,SW_BAIT,onStamp,STAMPS,nextStamp,stampDir,signalAI,calibrate,createWorld,MAPS,parseMap,mapToStr,parseTile,tileToken,DIFF,DIRS,DX,DY,CYCLE,ON};
+if(typeof module!=='undefined')module.exports={TUN_P,SW_P,SW_BAIT,onStamp,STAMPS,nextStamp,stampDir,signalAI,calibrate,createWorld,MAPS,parseMap,mapToStr,parseTile,tileToken,DIFF,DIRS,DX,DY,CYCLE,ON};
