@@ -74,6 +74,16 @@ button{touch-action:manipulation}
   .touch{display:block}
   .meter{width:70px}
 }
+/* 폰 세로: 가로 화면 그대로(레일 가로) 위에 두고, 남는 아래를 큰 조작 버튼으로 */
+.pad{display:none}
+@media (pointer:coarse) and (orientation:portrait){
+  .stage{height:auto;aspect-ratio:16/10}
+  .touch .br{display:none}
+  .pad{display:grid;grid-template-columns:1fr 1fr;gap:10px;flex:1;min-height:0}
+  .pad button{min-height:0;height:100%;font-size:22px;border-width:3px}
+  .pad #pLook{grid-column:1/-1}
+  .wrap{min-height:calc(100dvh - 8px)}
+}
 
 </style>
 
@@ -92,6 +102,7 @@ button{touch-action:manipulation}
     <div class="touch" id="touch"><button class="alt tl" id="tPause" hidden>일시정지</button><button class="br" id="tLook" hidden>돌아보기</button><span class="hint" id="tHint" hidden>옆 레일 쪽으로 밀거나 톡 눌러서 이동</span></div>
     <div class="panel" id="panel"><div class="box" id="panelBox"></div></div>
   </div>
+  <div class="pad" id="pad"><button class="alt" id="pUp" hidden>▲ 위 레일</button><button class="alt" id="pDown" hidden>▼ 아래 레일</button><button id="pLook" hidden>돌아보기</button></div>
   <div class="tools" id="hideTools" hidden>
     <div class="grp"><button class="alt" data-hop="3">↑ W</button><button class="alt" data-hop="1">↓ S</button><button class="alt" data-hop="2">← A</button><button class="alt" data-hop="0">→ D</button></div>
     <div class="grp"><button class="alt" id="fakeBtn">걸린 척 (C)</button></div>
@@ -342,10 +353,9 @@ function buildTiles(tiles){S.remove(tileG);tileG=new THREE.Group();S.add(tileG);
   fitCam();}
 // 화면 비율에 맞춰 카메라 거리: 16:9보다 좁으면 가로가 다 들어오게 뒤로, 넓으면(폰 가로) 세로가 다 들어오는 데까지 당긴다
 // 카메라: 내려다보는 각도는 고정, 실제 칸 범위 + 신호등 + (숨는 쪽이면) 직원이 화면 가장자리 6% 안에 꽉 차도록 거리와 중심을 맞춘다
-// 가로 화면: 앞(+z)에서 내려다봄(레일이 가로). 세로 화면(폰 세로): 왼쪽(-x)에서 내려다봐서 레일이 세로로 서게
+// 카메라는 늘 앞(+z)에서 내려다본다(레일이 가로). 폰을 세로로 들어도 같은 화면을 위에 두고, 아래는 조작 버튼 자리
 const camDir=new THREE.Vector3(0,.92,.42).normalize(),fitV=new THREE.Vector3();
-const isPortrait=()=>(cam.aspect||16/9)<.85;
-function fitCam(){if(isPortrait())camDir.set(-.42,.92,0).normalize();else camDir.set(0,.92,.42).normalize();const pts=[],h=CS*.5,X0=wx(occ.x0)-h,X1=wx(occ.x1)+h,Z0=wz(occ.y0)-h,Z1=wz(occ.y1)+h;
+function fitCam(){const pts=[],h=CS*.5,X0=wx(occ.x0)-h,X1=wx(occ.x1)+h,Z0=wz(occ.y0)-h,Z1=wz(occ.y1)+h;
   [[X0,Z0],[X1,Z0],[X0,Z1],[X1,Z1]].forEach(([x,z])=>{pts.push([x,0,z],[x,3.6,z]);});
   const lx=LEDS?wx(occ.x0):wx(0)-CS*1.15,lz=wz((H-1)/2);if(!LEDS)pts.push([lx-1,0,lz],[lx-1,7.6,lz],[lx+1,7.6,lz]);
   if(mode==='hide')pts.push([wx(occ.x0),0,wz(H-1)+CS*.9+1],[wx(occ.x1),0,wz(H-1)+CS*.9+1],[wx(occ.x0),3.4,wz(H-1)+CS*.9+1]);
@@ -362,9 +372,16 @@ function makeEdGrid(){const g=new THREE.Group();for(let x=0;x<=W;x++){const l=ne
 const boxGeo=new THREE.BoxGeometry(1,1,1),labelGeo=new THREE.BoxGeometry(.72,.05,.54),shadowGeo=new THREE.CircleGeometry(.75,16);
 const cardMats=['#c08d5c','#b07f52','#cc9b6b'].map(M),labelMats=COL.map(c=>new THREE.MeshBasicMaterial({color:c})),shadowMat=new THREE.MeshBasicMaterial({color:'#000',transparent:true,opacity:.28,depthWrite:false});
 let meshes=new Map();const ledMat=new THREE.MeshBasicMaterial({color:'#35e06f'});const plainLabel=new THREE.MeshBasicMaterial({color:'#f3efe4'});
-function meshFor(b){let m=meshes.get(b);if(m)return m;const g=new THREE.Group();const sh=new THREE.Mesh(shadowGeo,shadowMat);sh.rotation.x=-Math.PI/2;sh.position.y=.33;sh.scale.setScalar(b.size);g.add(sh);
+// 상자 무늬(분기 갈래 시험): 0 없음, 1 빨간 테이프, 2 파란 테이프, 3 검은 십자 테이프, 4 노란 동그라미 스티커. 같은 무늬가 판에 여러 개라 따라갈 수는 있어도 확신은 못 한다
+const PATS=5,tapeGeo=new THREE.BoxGeometry(1.02,.06,.22),dotGeo=new THREE.CylinderGeometry(.2,.2,.06,16),patMats=[null,B('#d6322a'),B('#2f6fd6'),B('#1e1c18'),B('#f2c230')];
+const newPat=()=>(Math.random()*PATS)|0;
+function decorate(m,b){if(m.deco){m.g.remove(m.deco);m.deco=null;}m.pat=b.pat;if(!b.pat)return;const d=new THREE.Group(),top=.33+b.size*.8+.06;
+  if(b.pat===4){const c=new THREE.Mesh(dotGeo,patMats[4]);c.position.set(b.size*.22,top,b.size*.22);c.scale.setScalar(b.size);d.add(c);}
+  else{const t=new THREE.Mesh(tapeGeo,patMats[b.pat]);t.position.y=top;t.scale.setScalar(b.size);d.add(t);if(b.pat===3){const t2=t.clone();t2.rotation.y=Math.PI/2;d.add(t2);}}
+  m.g.add(d);m.deco=d;}
+function meshFor(b){if(FEAT.switch&&b.pat==null)b.pat=newPat();let m=meshes.get(b);if(m){if(m.pat!==b.pat)decorate(m,b);return m;}const g=new THREE.Group();const sh=new THREE.Mesh(shadowGeo,shadowMat);sh.rotation.x=-Math.PI/2;sh.position.y=.33;sh.scale.setScalar(b.size);g.add(sh);
   const body=new THREE.Mesh(boxGeo,cardMats[b.id%3]);body.scale.set(b.size,b.size*.8,b.size);body.position.y=.33+b.size*.4;g.add(body);
-  const lab=new THREE.Mesh(labelGeo,FEAT.colors?labelMats[b.dest]:plainLabel);lab.position.y=.33+b.size*.8+.03;lab.scale.setScalar(b.size);g.add(lab);S.add(g);body.userData.box=b;lab.userData.box=b;m={g,body,lab,dest:b.dest,bump:0,pin:null};meshes.set(b,m);return m;}
+  const lab=new THREE.Mesh(labelGeo,FEAT.colors?labelMats[b.dest]:plainLabel);lab.position.y=.33+b.size*.8+.03;lab.scale.setScalar(b.size);g.add(lab);S.add(g);body.userData.box=b;lab.userData.box=b;m={g,body,lab,dest:b.dest,bump:0,pin:null};meshes.set(b,m);if(FEAT.switch)decorate(m,b);return m;}
 function clearMeshes(){meshes.forEach(m=>S.remove(m.g));meshes=new Map();}
 // 도장 칸 표시(금색 고리 + 위에 떠서 도는 동전)
 let stampMeshes=[];const coinGeo=new THREE.CylinderGeometry(.75,.75,.18,24),stampRingGeo=new THREE.RingGeometry(1.05,1.45,4);
@@ -402,7 +419,7 @@ function saveRecord(r){records.unshift(r);records=records.slice(0,30);try{localS
 
 // ---------- 시작/메뉴/끝 ----------
 // 터치 기기 무대 위 버튼(일시정지·돌아보기·밀기 안내). m=null이면 모두 숨김
-function touchUi(m){$('tPause').hidden=true;$('tLook').hidden=m!=='seek';$('tHint').hidden=m!=='hide';}
+function touchUi(m){$('tPause').hidden=true;$('tLook').hidden=m!=='seek';$('tHint').hidden=m!=='hide';$('pUp').hidden=$('pDown').hidden=m!=='hide';$('pLook').hidden=m!=='seek';}
 const coarse=()=>typeof matchMedia==='function'&&matchMedia('(pointer:coarse)').matches;
 // 폰: 판을 시작할 때 전체 화면 + 가로 고정 시도(안드로이드). 아이폰은 둘 다 안 돼서 세로면 가림막만 뜬다
 function goFull(){if(!coarse())return;try{const d=document.documentElement;if(!document.fullscreenElement&&d.requestFullscreen)d.requestFullscreen().then(()=>{try{}catch(e){}},()=>{});}catch(e){}}
@@ -462,7 +479,7 @@ function updHud(){$('timeL').textContent=Math.max(0,Math.ceil(time))+'초';
   if(mode==='hide'&&player){$('goalL').innerHTML=`도장 <b>${player.got||0}/${goal}</b> · 직원 스캔 <b>${hunt.scans}</b>번`;$('susBar').style.width=Math.min(100,player.sus/3*100)+'%';$('susWrap').classList.toggle('hot',player.sus>1.1);
     if(FEAT.fake){$('fakeBtn').textContent=`걸린 척 (C) ${fakes}`;$('fakeBtn').disabled=!fakes;}}
   else if(mode==='seek'){$('goalL').innerHTML=`찾음 <b>${found}</b> · 놓침 <b>${escaped}</b> · 스캔 <b>${scans}</b>번`;
-    $('lookBtn').disabled=$('tLook').disabled=!(world.light==='green'&&world.lightT>=1);}}
+    $('lookBtn').disabled=$('tLook').disabled=$('pLook').disabled=!(world.light==='green'&&world.lightT>=1);}}
 
 // ---------- 숨는 쪽 조작 ----------
 const KD={KeyD:0,ArrowRight:0,KeyS:1,ArrowDown:1,KeyA:2,ArrowLeft:2,KeyW:3,ArrowUp:3};
@@ -510,7 +527,7 @@ document.addEventListener('pointercancel',()=>swipe=null);
 // ---------- 찾는 쪽 ----------
 function seekSignal(dt){const D=DIFF[diffKey];if(world.light==='yellow'&&world.lightT>=D.yellow)world.setLight('red');else if(world.light==='red'&&world.lightT>=2.5)world.setLight('green');}
 function look(){if(mode!=='seek'||over||paused||world.light!=='green'||world.lightT<1)return;world.setLight('yellow');}
-$('lookBtn').onclick=look;$('tLook').onclick=look;
+$('lookBtn').onclick=look;$('tLook').onclick=look;$('pLook').onclick=look;$('pUp').onclick=()=>{if(player){const d=player.d;hideInput(screenToWorld(0,-1,[(d+1)%4,(d+3)%4]));}};$('pDown').onclick=()=>{if(player){const d=player.d;hideInput(screenToWorld(0,1,[(d+1)%4,(d+3)%4]));}};
 const ray=new THREE.Raycaster(),ndc=new THREE.Vector2();
 function setRay(e){const r=cv.getBoundingClientRect();ndc.set(((e.clientX-r.left)/r.width)*2-1,-((e.clientY-r.top)/r.height)*2+1);ray.setFromCamera(ndc,cam);}
 const pickPlane=new THREE.Plane(new THREE.Vector3(0,1,0),-1),pp=new THREE.Vector3();
@@ -659,6 +676,7 @@ function frame(now){const dt=Math.min(.05,(now-last)/1000);last=now;
     world.step(dt);
     world.events.forEach(ev=>{
       if(ev.type==='thud'){const m=meshes.get(ev.b);if(m)m.bump=.3;if(ev.off)alertOn(ev.b);if(live&&mode==='hide'&&ev.off)sus(ev.b,3.6);if(live&&mode==='hide'&&FEAT.switch&&world.hasSwitches&&!ev.off&&!ev.sw&&!ev.tun)sus(ev.b,1.6);}
+      if(ev.type==='deliver'&&FEAT.switch&&ev.b.kind==='npc')ev.b.pat=newPat(); // 출고된 일반 상자는 새 상자로 다시 나온다
       if(ev.type==='frozen'){alertOn(ev.b);if(live&&mode==='hide'){sus(ev.b,3.2);if(ev.b===player)say('넘어가다 걸렸다!',1.2);}}
       if(ev.type==='light'){if(live)lightSound(ev.s);if(ev.s==='green')alertsOff();if(live&&mode==='hide')recLight(ev.s);if(live&&mode==='seek'&&ev.s==='green')bots.forEach(b=>{if(!b.found&&!b.gone)botPlan(b);});}});
 
