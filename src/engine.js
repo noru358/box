@@ -11,7 +11,7 @@ const SW_P=.55,SW_BAIT=.06;
 // 터널: 'U' 기호. 덮개 아래라 찾는 쪽에게 안 보인다. 터널 안에서 터널 안으로 넘어가면 안 보이고 걸리지도 않는다. 일반 상자도 터널을 지날 때 TUN_P 확률로 한 번 안에서 갈아탄다(나온 줄이 바뀐 게 확실한 증거가 되지 않게).
 const TUN_P=.12; // 터널을 한 번 지날 때 안에서 갈아탈 확률(칸마다가 아니라 한 번) // 색 끔일 때 일반 상자가 초록에 옆으로 옮기는 빈도(초당, 한 초록에 한 번까지)
 const DIFF={easy:{name:'쉬움',yellow:.65,late:.35,green:[1.6,4.2],red:[1.4,2.4],fake:.12,aim:1.0,slack:1.6,k:1.4},normal:{name:'보통',yellow:.45,late:.22,green:[1.0,3.8],red:[1.6,2.8],fake:.2,aim:.75,slack:1.25,k:1},hard:{name:'어려움',yellow:.3,late:.12,green:[.6,3.4],red:[1.8,3.2],fake:.3,aim:.55,slack:1.0,k:.7}};
-function laneMap(rows,bars){const W=14,g=[Array(W).fill('..')];
+function laneMap(rows,bars,W){W=W||14;const g=[Array(W).fill('..')];
   rows.forEach(r=>{const t=Array(W).fill(r.sp+r.d);const right=r.d==='>';t[right?0:W-1]='I'+r.d;t[right?W-1:0]='X'+r.d+r.c;bars.forEach(c=>t[c]='S'+r.d);Object.entries(r.ex||{}).forEach(([k,v])=>t[+k]=v);g.push(t);});
   g.push(Array(W).fill('..'));return g.map(r=>r.join(' ')).join('/');}
 // 굽은 길(v12-switch 시험): 바깥 고리(시계 방향)와 안쪽 고리(반시계) + 가운데 두 줄(입고→출고). 세로로 흐르는 길, 모퉁이, 세로 터널.
@@ -22,6 +22,7 @@ function loopMap(){const W=14,H=8,g=Array.from({length:H},()=>Array(W).fill('..'
   [[5,1,'W>'],[9,1,'W>'],[4,6,'W<'],[8,6,'W<'],[6,2,'W<'],[7,5,'W>'],[1,3,'W^'],[2,4,'Wv'],[6,3,'W>'],[7,4,'W<'],[12,3,'Uv'],[12,4,'Uv'],[11,3,'U^'],[11,4,'U^']].forEach(([x,y,t])=>set(x,y,t));
   return g.map(r=>r.join(' ')).join('/');}
 const MAPS={
+  compact:{name:'세로 폰용(9칸)',str:laneMap([{d:'>',sp:'n',c:0,ex:{2:'W>',6:'W>'}},{d:'<',sp:'n',c:0,ex:{3:'W<',6:'W<'}},{d:'>',sp:'n',c:0,ex:{2:'W>',5:'W>'}},{d:'>',sp:'n',c:0,ex:{2:'W>',4:'U>',5:'U>',7:'W>'}},{d:'>',sp:'n',c:0,ex:{2:'W>',4:'U>',5:'U>',7:'W>'}},{d:'<',sp:'n',c:0,ex:{3:'W<',6:'W<'}},{d:'>',sp:'n',c:0,ex:{2:'W>',5:'W>'}}],[],9)},
   loop:{name:'굽은 길',str:loopMap()},
   switch:{name:'분기',str:laneMap([{d:'>',sp:'n',c:0,ex:{3:'W>',7:'W>',11:'W>'}},{d:'<',sp:'n',c:1,ex:{5:'W<',9:'W<'}},{d:'>',sp:'n',c:2,ex:{3:'W>',6:'U>',7:'U>',8:'U>',11:'W>'}},{d:'>',sp:'n',c:3,ex:{5:'W>',6:'U>',7:'U>',8:'U>',9:'W>'}}],[])},
   plain:{name:'기본',str:laneMap([{d:'>',sp:'n',c:0},{d:'<',sp:'n',c:1},{d:'>',sp:'n',c:2},{d:'>',sp:'n',c:3}],[])},

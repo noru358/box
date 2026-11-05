@@ -8,7 +8,7 @@ function fill(w) { const n = w.tiles.flat().filter(Boolean).length; for (let i =
 
 // 1. 맵마다 상자가 막히지 않고 계속 흐르고 출고된다(색 켬·끔 둘 다)
 for (const k of Object.keys(E.MAPS)) for (const colors of [true, false]) {
-  if (k === 'switch' && colors) continue; // 분기 맵은 색 끔 전용
+  if (/W[<>v^]/.test(E.MAPS[k].str) && colors) continue; // 분기 칸 맵은 색 끔 전용
   const w = E.createWorld(E.MAPS[k].str, { colors }); fill(w);
   const sig = E.signalAI(E.DIFF.normal);
   let del = 0;
