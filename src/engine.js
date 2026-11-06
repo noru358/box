@@ -105,8 +105,9 @@ function createWorld(str,opt){opt=opt||{};const rng=opt.rng||Math.random;const {
     const [px,py]=w.pos(b);const nx=b.cx+DX[h],ny=b.cy+DY[h];const nt=T(nx,ny);if(!hopable(nt))return null;
     const dir2=nt.d;let cx=nx,cy=ny,s=b.s,d=dir2;
     if(dir2===b.d){}else if(dir2===(b.d+2)%4){const fx=nx+DX[b.d],fy=ny+DY[b.d];if(T(fx,fy)){cx=fx;cy=fy;s=1-b.s;}else s=0;}else s=0;
-    const fromSw=w.isSwitch(b.cx,b.cy),fromTun=w.isTunnel(b.cx,b.cy);
-    b.cx=cx;b.cy=cy;b.s=s;b.d=d;const nb=[cx+DX[d]*s,cy+DY[d]*s];const hid=fromTun&&w.isTunnel(cx,cy);b.slide={ox:px-nb[0],oy:py-nb[1],t:0,hid};
+    // 터널 안이었나는 화면에 보이는 위치로 본다(칸 번호는 최대 한 칸 뒤라, 터널 입구·출구 근처에서 안에 있는데도 밖으로 잡혔다)
+    const fromSw=w.isSwitch(b.cx,b.cy),fromTun=w.isTunnel(Math.round(px),Math.round(py))&&w.isTunnel(Math.round(px+DX[h]),Math.round(py+DY[h]));
+    b.cx=cx;b.cy=cy;b.s=s;b.d=d;const nb=[cx+DX[d]*s,cy+DY[d]*s];const hid=fromTun;b.slide={ox:px-nb[0],oy:py-nb[1],t:0,hid};
     return {off:w.thud(b,true,fromSw,hid)};}; // hid: 터널 안에서 터널 안으로(안 보임)
   w.step=function(dt){w.t+=dt;w.lightT+=dt;
     // NPC: 초록일 때 흩어져서 한 줄, 노랑일 땐 아주 가끔 늦게(=걸릴 수 있음)
