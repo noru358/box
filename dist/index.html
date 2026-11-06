@@ -449,7 +449,7 @@ function start(m){goFull();initSound();mode=m;over=false;paused=false;newWorld()
   hunt={t:2,target:null,aim:0,scans:15,stun:0};bots=[];hideMarks();player=null;rec=m==='hide'?{wins:[],cur:null,ps:world.t}:null;
   if(world.boxes.length<4){curKey='basic';menu();say('이 맵은 상자가 돌 자리가 부족해요');return;}
   if(FEAT.switch)poolInit();
-  if(m==='hide'){player=world.add('player')||world.boxes[0];player.kind='player';player.mul=1;player.got=0;placeStamp(player);recLight('green');[meArrow,meRing,worker].forEach(o=>o.visible=true);}
+  if(m==='hide'){player=world.add('player')||world.boxes[0];player.kind='player';player.mul=1;player.got=0;placeStamp(player);recLight('green');[meArrow,worker].forEach(o=>o.visible=true);}
   else{const pers=['rush','careful','mimic'];for(let i=0;i<3;i++){const b=world.boxes[i];b.kind='bot';b.pers=pers[i];b.got=0;placeStamp(b);bots.push(b);}}
   $('panel').hidden=true;$('susWrap').hidden=m!=='hide';$('hideTools').hidden=m!=='hide';$('seekTools').hidden=m!=='seek';$('editTools').hidden=true;$('timeWrap').hidden=false;$('pauseBtn').hidden=false;touchUi(m);
   document.querySelectorAll('[data-hop]').forEach(b=>b.hidden=!FEAT.speed&&(+b.dataset.hop%2===0));$('fakeBtn').hidden=!FEAT.fake;
@@ -679,7 +679,7 @@ function frame(now){const dt=Math.min(.05,(now-last)/1000);last=now;
       const s=player.stamp;if(s&&world.light==='green'&&world.lightT>.6&&world.boxes.some(b=>!b.gone&&!b.pending&&Math.abs(b.cx-s[0])<=1&&Math.abs(b.cy-s[1])<=1)&&Math.random()<dt*.9)world.setLight('yellow');}
     else if(live&&mode==='seek')seekSignal(dt);else if(!live)idleSig(world,dt);
     // 분기 갈래: 도장 수명. 다 되면 다른 곳으로 옮겨 간다(존버 방지)
-    if(live&&FEAT.switch&&!over){pool.forEach((s,i)=>{s.t-=dt;if(s.t<=0){S.remove(s.mesh);stampMeshes=stampMeshes.filter(g=>g!==s.mesh);const n=poolNew();if(n)pool[i]=n;}});
+    if(live&&FEAT.switch&&!over){pool.forEach((s,i)=>{s.t-=dt;if(s.t<=0){const n=poolNew();if(n){S.remove(s.mesh);stampMeshes=stampMeshes.filter(g=>g!==s.mesh);pool[i]=n;}else s.t=STAMP_LIFE;}}); // 빈 자리가 없으면 그 코인을 그대로 둔다
       (mode==='hide'?[player]:bots).forEach(b=>{if(!b||b.gone||b.found||b.pending||over)return;b.took=b.took||new Set();
         for(const s of pool){if(b.took.has(s.id)||!onStamp(world,b,[s.x,s.y]))continue;b.took.add(s.id);b.got++;
           if(b===player){say(`코인 ${b.got}/${goal}`);if(b.got>=goal){end(true,`${Math.round((performance.now()-t0)/1000)}초 만에 코인 ${goal}개, 직원 스캔 ${hunt.scans}번 남음.`,1000+Math.max(0,time)*10);return;}}
@@ -715,7 +715,7 @@ function frame(now){const dt=Math.min(.05,(now-last)/1000);last=now;
       r.scale.setScalar(.35+.65*f);r.material=mine?doneRing:goldRing;c.visible=!mine&&!(s.t<3&&Math.floor(now/120)%2);}); // 고리가 줄어들고, 3초 남으면 동전이 깜빡. 내가 찍은 건 흐리게(나에게만)
     const hv=!!(hover&&mode==='seek'&&!over&&!hover.gone&&!hover.found);hoverRing.visible=hv;if(hv){const [hx,hy]=world.pos(hover);hoverRing.position.set(wx(hx),.42,wz(hy));}
     if(mode==='hide'&&player&&!player.pending){const [x,y]=world.pos(player);const X=wx(x),Z=wz(y),h=player.size*.8+.33;
-      meArrow.position.set(X,h+1.4+.35*Math.sin(now/220),Z);meArrow.quaternion.copy(cam.quaternion);meArrow.scale.setScalar(1.35);meRing.position.set(X,.4,Z);meRing.scale.setScalar(player.size*(1+.06*Math.sin(now/160)));
+      meArrow.position.set(X,h+1.4+.35*Math.sin(now/220),Z);meArrow.quaternion.copy(cam.quaternion);meArrow.scale.setScalar(1.35);
       if(live)huntStep(dt);}
     if(live&&time<=0){if(mode==='hide')end(false,`시간 끝. 코인 ${player.got}/${goal}.`,player.got*100);else end(false,`시간 끝. 찾음 ${found}, 놓침 ${escaped}.`,found*1000);}
     if(live)updHud();}
