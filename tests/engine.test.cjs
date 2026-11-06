@@ -8,6 +8,7 @@ function fill(w) { const n = w.tiles.flat().filter(Boolean).length; for (let i =
 
 // 1. 맵마다 상자가 막히지 않고 계속 흐르고 출고된다(색 켬·끔 둘 다)
 for (const k of Object.keys(E.MAPS)) for (const colors of [true, false]) {
+  if (/W[<>v^]/.test(E.MAPS[k].str) && colors) continue; // 분기 칸 맵은 색 끔 전용
   const w = E.createWorld(E.MAPS[k].str, { colors }); fill(w);
   const sig = E.signalAI(E.DIFF.normal);
   let del = 0;
@@ -95,6 +96,38 @@ for (const k of Object.keys(E.MAPS)) for (const colors of [true, false]) {
   }
   }
   ok(tested, '도장 판정 시험 상황을 만들었다');
+}
+
+// 9. 분기 맵: 일반 상자는 분기 칸이나 그 바로 앞뒤에서만 넘어가고, 덜컹 이벤트에 분기 칸 여부가 붙는다
+{
+  const w = E.createWorld(E.MAPS.switch.str, { colors: false }); fill(w);
+  const sig = E.signalAI(E.DIFF.normal); let on = 0, near = 0, off = 0, flag = 0, tun = 0, tunFlag = 0, tunOff = 0;
+  const oh = w.hop; w.hop = function (b, h) { const sw = w.isSwitch(b.cx, b.cy), nr = w.nearSwitch(b.cx, b.cy), tn = w.isTunnel(b.cx, b.cy); const r = oh.call(w, b, h); if (r) { if (tn) { tun++; if (!b.slide.hid) tunOff++; } else if (sw) on++; else if (nr) near++; else off++; } return r; };
+  for (let i = 0; i < 30 * 120; i++) { sig(w, 1 / 30); w.step(1 / 30); flag += w.events.filter(e => e.type === 'thud' && e.sw).length; tunFlag += w.events.filter(e => e.type === 'thud' && e.tun).length; w.events = []; }
+  ok(off === 0 && on > near && on > 50, `분기 맵: 일반 상자 넘어가기 분기 칸 ${on}, 바로 앞뒤 ${near}, 그 밖 ${off}`);
+  ok(flag === on, `분기 맵: 분기 칸에서 넘어간 덜컹에 sw 표시 (${flag}/${on})`);
+  ok(tun > 10 && tunOff === 0 && tunFlag === tun, `터널: 일반 상자는 터널 안에서 터널 안으로만 갈아탐(${tun}번, 밖으로 ${tunOff}), 덜컹에 tun 표시(${tunFlag})`);
+}
+
+// 10. 터널 안에서 터널 안으로 넘어가다 빨간불이 돼도 안 걸리고, 빨간불 중에 넘어가도 off가 아니다
+{
+  const w = E.createWorld(E.MAPS.switch.str, { colors: false }); const p = w.add('player'); let done = false;
+  for (let i = 0; i < 3000 && !done; i++) { w.step(1 / 60); w.events = [];
+    if (!w.midMove(p) && w.isTunnel(p.cx, p.cy)) for (const h of [1, 3]) { if (done) break; if (w.isTunnel(p.cx + E.DX[h], p.cy + E.DY[h]) && w.hop(p, h)) {
+      w.setLight('yellow'); w.setLight('red'); const fr = w.events.some(e => e.type === 'frozen' && e.b === p); const th = w.events.find(e => e.type === 'thud' && e.b === p);
+      ok(!fr && th && th.tun && !th.off, `터널: 안에서 넘어가다 빨강이어도 안 걸림(frozen ${fr}), 덜컹 tun ${th && th.tun}`); done = true; } } }
+  ok(done, '터널 시험 상황을 만들었다');
+}
+
+// 11. 세로 레일(맵 만들기 대비): 분기 칸·터널이 위아래로 흐르는 레일에서도 똑같이 동작
+{
+  const rows = ['.. Iv Iv ..', '.. nv nv ..', '.. Wv Wv ..', '.. nv nv ..', '.. Uv Uv ..', '.. Uv Uv ..', '.. nv nv ..', '.. Xv0 Xv0 ..'];
+  const str = rows.join('/');
+  ok(E.mapToStr(E.parseMap(str)) === E.mapToStr(E.parseMap(E.mapToStr(E.parseMap(str)))), '세로 맵: 공유 문자열 왕복(분기 W, 터널 U)');
+  const w = E.createWorld(str, { colors: false }); for (let i = 0; i < 5; i++) w.add('npc');
+  const sig = E.signalAI(E.DIFF.normal); let sw = 0, tun = 0, other = 0, del = 0;
+  for (let i = 0; i < 30 * 120; i++) { sig(w, 1 / 30); w.step(1 / 30); for (const e of w.events) { if (e.type === 'thud') { if (e.tun) tun++; else if (e.sw) sw++; else other++; } if (e.type === 'deliver') del++; } w.events = []; }
+  ok(del > 20 && sw > 5 && other < sw, `세로 맵: 출고 ${del}, 분기 칸 넘어가기 ${sw}, 터널 안 ${tun}, 그 밖(미끼) ${other}`);
 }
 
 console.log(failed ? `\n${failed}개 실패` : '\n엔진 테스트 전부 통과');

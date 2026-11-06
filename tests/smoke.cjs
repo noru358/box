@@ -48,7 +48,7 @@ try {
     els.backEd.onclick(); run(5); els.editDone.onclick(); els.edMenu.onclick();
     els.bRec.onclick(); ok(els.panelBox.innerHTML.includes('기록'), '기록 화면'); els.recBack.onclick();
   } else {
-    ok(!els.panelBox.innerHTML.includes('bEdit') && !els.panelBox.innerHTML.includes('bRec') && !els.panelBox.innerHTML.includes('mapSel'), '덜어낸 판: 맵 만들기·기록·맵 선택이 메뉴에 없음');
+    ok(!els.panelBox.innerHTML.includes('bEdit') && !els.panelBox.innerHTML.includes('bRec') && (global.__box.FEAT.switch || !els.panelBox.innerHTML.includes('mapSel')), '덜어낸 판: 맵 만들기·기록이 메뉴에 없음(분기 갈래는 맵 선택 있음)');
   }
 
   // 상자가 옮길 수 있는 상태가 될 때까지(넘어가는 중 아님, 양 끝 출고·입고 칸 아님) 한 프레임씩
@@ -83,8 +83,8 @@ try {
   // 기다리는 사이 직원에게 찍혀 판이 끝났을 수도 있다
   if (!global.__box.over) { els.pauseBtn.onclick(); els.quit.onclick(); } else els.toMenu.onclick();
 
-  els.bHide.onclick(); run(300); els.fakeBtn.onclick && els.fakeBtn.onclick(); run(2400);
-  ok(/도장/.test(els.goalL.innerHTML) || /통과|실패/.test(els.panelBox.innerHTML), '숨는 쪽 한 판(80초)이 끝까지 돈다');
+  els.bHide.onclick(); run(300); els.fakeBtn.onclick && els.fakeBtn.onclick(); run(3200);
+  ok(/도장/.test(els.goalL.innerHTML) || /통과|실패/.test(els.panelBox.innerHTML), '숨는 쪽 한 판(105초)이 끝까지 돈다');
 
   {
     const H = global.__box.human;
@@ -95,8 +95,8 @@ try {
     const B = global.__box, n = B.world.boxes.filter(b => !b.gone).length;
     ok(n <= 17, `찾는 쪽 상자 수 ${n}개 (17개 이하)`);
   }
-  els.lookBtn.onclick && els.lookBtn.onclick(); run(2400);
-  ok(/찾음/.test(els.goalL.innerHTML) || /통과|실패/.test(els.panelBox.innerHTML), '찾는 쪽 한 판(80초)이 끝까지 돈다');
+  els.lookBtn.onclick && els.lookBtn.onclick(); run(3200);
+  ok(/찾음/.test(els.goalL.innerHTML) || /통과|실패/.test(els.panelBox.innerHTML), '찾는 쪽 한 판(105초)이 끝까지 돈다');
   {
     const bots = global.__box.bots;
     ok(bots.length === 3 && bots.every(b => Array.isArray(b.plan) && (b.src === 'synth' || b.src === 'human')), `숨은 셋이 창(초록마다 계획)으로 움직인다 (${bots.map(b => b.src).join(',')})`);
