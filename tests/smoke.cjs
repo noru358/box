@@ -51,6 +51,9 @@ try {
     ok(!els.panelBox.innerHTML.includes('bEdit') && !els.panelBox.innerHTML.includes('bRec') && (global.__box.FEAT.switch || !els.panelBox.innerHTML.includes('mapSel')), '덜어낸 판: 맵 만들기·기록이 메뉴에 없음(분기 갈래는 맵 선택 있음)');
   }
 
+  // 친구와 하기: 실시간 방이 없는 곳(여기)에서는 눌러도 메뉴에 머문다
+  if (els.bHost && els.bHost.onclick) { els.bHost.onclick(); els.bJoin.onclick(); run(5); ok(global.__box.mode === null && !global.__box.net, '친구와 하기: 방 없으면 메뉴 그대로'); }
+
   // 상자가 옮길 수 있는 상태가 될 때까지(넘어가는 중 아님, 양 끝 출고·입고 칸 아님) 한 프레임씩
   const ready = () => { for (let i = 0; i < 600; i++) { const B = global.__box, p = B.player; if (B.over) return false; if (p && !p.pending && !B.world.midMove(p) && p.cx >= 1 && p.cx <= B.world.W - 3) return true; run(1); } return false; };
   // 스와이프 한 번 = 옆 레일로 한 번 (터치 조작). 찍혀서 판이 끝나면 다시 시작

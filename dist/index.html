@@ -114,7 +114,7 @@ button{touch-action:manipulation}
     <div class="grp" id="colorPick"></div>
     <div class="grp"><button id="editDone">편집 끝</button></div>
   </div>
-  <p class="note" id="ver">v13 · 분기 칸 · 터널 · 공용 코인 4개 · 판 90초</p>
+  <p class="note" id="ver">v13.1 · 친구와 하기 · 분기 칸 · 터널 · 공용 코인 4개 · 판 90초</p>
 </div>
 
 <div class="rotate" id="rotate">폰을 가로로 돌려 주세요</div>
@@ -172,7 +172,9 @@ function createWorld(str,opt){opt=opt||{};const rng=opt.rng||Math.random;const {
   const spawns=cells.filter(([x,y])=>tiles[y][x].t==='spawn');
   // colorsOn=false(v12 기본): 일반 상자는 초록 때 무작위로 옆 레일, 출고구는 색 상관없이 받는다
   const colorsOn=opt.colors!==false;
-  const w={W,H,tiles,colors,diff,colorsOn,boxes:[],t:0,light:'green',lightT:0,sortOn:true,win:0,events:[]};
+  // puppet: 친구와 하기의 상자 쪽 화면. 일반 상자의 결정·재입고는 직원(방장) 화면이 하고, 여기선 벨트만 굴리며 받은 상태로 덮어쓴다
+  const puppet=!!opt.puppet;
+  const w={W,H,tiles,colors,diff,colorsOn,puppet,boxes:[],t:0,light:'green',lightT:0,sortOn:true,win:0,events:[]};
   const T=(x,y)=>(x>=0&&y>=0&&x<W&&y<H)?tiles[y][x]:null;w.T=T;
   const wrap=(x,y)=>[(x+W)%W,(y+H)%H];
   const hopable=t=>t&&t.t!=='turn'&&t.t!=='exit';
@@ -207,7 +209,7 @@ function createWorld(str,opt){opt=opt||{};const rng=opt.rng||Math.random;const {
   w.center=(x,y)=>[x,y];
   w.pos=b=>{let x=b.cx+DX[b.d]*b.s,y=b.cy+DY[b.d]*b.s;if(b.slide){const k=1-Math.min(1,b.slide.t);x+=b.slide.ox*k;y+=b.slide.oy*k;}return [x,y];};
   w.midMove=b=>!!(b.slide&&b.slide.t<1);
-  function respawn(b){const free=spawns.filter(([x,y])=>!w.boxes.some(o=>o!==b&&!o.gone&&!o.pending&&Math.hypot(o.cx+DX[o.d]*o.s-x,o.cy+DY[o.d]*o.s-y)<1));
+  function respawn(b){if(puppet){b.pending=true;return;}const free=spawns.filter(([x,y])=>!w.boxes.some(o=>o!==b&&!o.gone&&!o.pending&&Math.hypot(o.cx+DX[o.d]*o.s-x,o.cy+DY[o.d]*o.s-y)<1));
     if(!free.length){b.pending=true;return;}const [x,y]=free[(rng()*free.length)|0];b.cx=x;b.cy=y;b.d=tiles[y][x].d;b.s=0;b.pending=false;b.slide=null;}
   // 칸 중앙 도착: 다음 방향을 정한다
   function arrive(b){const t=tiles[b.cy][b.cx];
@@ -236,11 +238,11 @@ function createWorld(str,opt){opt=opt||{};const rng=opt.rng||Math.random;const {
     // NPC: 초록일 때 흩어져서 한 줄, 노랑일 땐 아주 가끔 늦게(=걸릴 수 있음)
     const rate=(w.light==='green'?(colorsOn?1.3:WANDER):w.light==='yellow'?w.diff.late:0);
     // 분기 칸 맵: 일반 상자는 분기 칸(과 미끼 자리)에 들어선 직후 한 번만 정한다. 노랑이면 아주 가끔 늦게(late).
-    if(w.hasSwitches)for(const b of w.boxes){if(b.kind!=='npc'||b.gone||b.pending||w.midMove(b))continue;if(b.tunPass&&!w.isTunnel(b.cx,b.cy))b.tunPass=false;if(b.s>.5)continue;const key=b.cx+','+b.cy;if(b.swKey===key)continue;
+    if(w.hasSwitches&&!puppet)for(const b of w.boxes){if(b.kind!=='npc'||b.gone||b.pending||w.midMove(b))continue;if(b.tunPass&&!w.isTunnel(b.cx,b.cy))b.tunPass=false;if(b.s>.5)continue;const key=b.cx+','+b.cy;if(b.swKey===key)continue;
       if(w.isTunnel(b.cx,b.cy)){b.swKey=key;if(!b.tunPass){b.tunPass=true;if(rng()<TUN_P){const h=w.tunSide(b);if(h>=0)w.hop(b,h);}}continue;} // 터널 안: 신호와 상관없이 가끔 갈아탐
       const sw=w.isSwitch(b.cx,b.cy),bait=!sw&&w.nearSwitch(b.cx,b.cy);if(!sw&&!bait)continue;b.swKey=key;
       const ok=w.light==='green'||(w.light==='yellow'&&rng()<w.diff.late);if(ok&&rng()<(sw?SW_P:SW_BAIT)){const h=w.randSide(b);if(h>=0)w.hop(b,h);}}
-    if(rate>0&&!w.hasSwitches)for(const b of w.boxes){if(b.kind!=='npc'||b.gone||b.pending||w.midMove(b)||b.lastWin===w.win)continue;if(rng()<dt*rate){const h=colorsOn?w.bestSide(b,b.cx,b.cy):w.randSide(b);if(h>=0)w.hop(b,h);}}
+    if(rate>0&&!w.hasSwitches&&!puppet)for(const b of w.boxes){if(b.kind!=='npc'||b.gone||b.pending||w.midMove(b)||b.lastWin===w.win)continue;if(rng()<dt*rate){const h=colorsOn?w.bestSide(b,b.cx,b.cy):w.randSide(b);if(h>=0)w.hop(b,h);}}
     // 차간 거리
     const P=w.boxes.map(b=>(b.gone||b.pending)?null:w.pos(b));
     w.boxes.forEach((b,i)=>{b.follow=1;if(!P[i])return;const hx=DX[b.d],hy=DY[b.d];
@@ -257,6 +259,13 @@ function createWorld(str,opt){opt=opt||{};const rng=opt.rng||Math.random;const {
         if(tiles[b.cy][b.cx].t==='jam'&&!w.jamOpen(b.cx,b.cy)){s=0;break;}}
       if(!b.pending)b.s=s;}
   };
+  // 친구와 하기: 상자 상태를 짧은 배열로 주고받는다 [id,cx,cy,d,s,크기,무늬,상태비트,slide t,ox,oy]
+  w.packBoxes=function(){return w.boxes.map(b=>{const f=(b.gone?1:0)|(b.pending?2:0)|(b.found?4:0)|(b.alert?8:0)|(b.slide&&b.slide.hid?16:0);const a=[b.id,b.cx,b.cy,b.d,+b.s.toFixed(3),b.size,b.pat|0,f];
+    if(b.slide&&b.slide.t<1)a.push(+b.slide.t.toFixed(2),+b.slide.ox.toFixed(2),+b.slide.oy.toFixed(2));return a;});};
+  w.loadBoxes=function(arr,keep){for(const a of arr){let b=w.boxes.find(o=>o.id===a[0]);
+      if(!b){b={id:a[0],kind:'npc',dest:0,mul:1,follow:1,sus:0,deliv:0,hold:0,fakeT:0,lastWin:-1,slide:null};w.boxes.push(b);}
+      const f=a[7];b.size=a[5];b.pat=a[6];b.gone=!!(f&1);b.found=!!(f&4);b.alert=!!(f&8);if(keep&&keep(b))continue;
+      b.cx=a[1];b.cy=a[2];b.d=a[3];b.s=a[4];b.pending=!!(f&2);b.slide=a.length>8?{t:a[8],ox:a[9],oy:a[10],hid:!!(f&16)}:null;}};
   return w;}
 // 직원(AI)의 신호 조작: 초록 길이는 들쭉날쭉, 가끔 짧게 끊는 낚시
 function signalAI(diff,rng){rng=rng||Math.random;const r=(a)=>a[0]+rng()*(a[1]-a[0]);let next=r(diff.green);
@@ -456,7 +465,7 @@ function start(m){goFull();initSound();mode=m;over=false;paused=false;newWorld()
   $('modeL').innerHTML=(m==='hide'?'<b>숨는 쪽</b>':'<b>찾는 쪽</b>')+(FEAT.special||FEAT.switch?` · ${curEntry().name}`:'')+(FEAT.diff?` · ${DIFF[diffKey].name}`:'');
   cv.style.cursor=m==='seek'?'crosshair':'default';updHud();}
 
-function menu(view){mode=null;over=true;paused=false;hideMarks();touchUi(null);clearStamps();['hideTools','seekTools','editTools','pauseBtn','susWrap','timeWrap'].forEach(id=>$(id).hidden=true);$('goalL').textContent='';$('modeL').innerHTML='<b>메뉴</b>';
+function menu(view){if(net)netLeave();mode=null;over=true;paused=false;hideMarks();touchUi(null);clearStamps();['hideTools','seekTools','editTools','pauseBtn','susWrap','timeWrap'].forEach(id=>$(id).hidden=true);$('goalL').textContent='';$('modeL').innerHTML='<b>메뉴</b>';
   if(edGrid){S.remove(edGrid);edGrid=null;}newWorld();$('panel').hidden=false;if(view==='records')return showRecords();
   const opts=mapList().map(m=>`<option value="${m.k}"${m.k===curKey?' selected':''}>${m.name}</option>`).join('');
   const dopts=Object.entries(DIFF).map(([k,v])=>`<option value="${k}"${k===diffKey?' selected':''}>${v.name}</option>`).join('');
@@ -464,10 +473,10 @@ function menu(view){mode=null;over=true;paused=false;hideMarks();touchUi(null);c
   $('panelBox').innerHTML=`<h1>택배 숨바꼭질</h1>
   ${FEAT.special||FEAT.diff||FEAT.switch?`<div class="row">${FEAT.special||FEAT.switch?`<label for="mapSel">맵</label><select id="mapSel">${opts}</select>`:''}${FEAT.diff?`<label for="diffSel">난이도</label><select id="diffSel">${dopts}</select>`:''}</div>`:''}
   <h2>AI와 하기</h2><div class="row"><button id="bHide">숨는 쪽</button><button class="alt" id="bSeek">찾는 쪽</button></div><p id="humanNote">${humanNote()}</p>
-  <h2>친구와 하기</h2><p>다음 버전에서 붙여요. 같은 링크를 연 사람끼리 한 명은 직원, 나머지는 상자.</p>
+  <h2>친구와 하기</h2><div class="row"><button id="bHost">직원으로 방 열기</button><button class="alt" id="bJoin">상자로 들어가기</button></div><p id="netNote">${netNote()}</p>
   ${FEAT.editor||FEAT.records?`<div class="row">${FEAT.editor?'<button class="alt" id="bEdit">맵 만들기</button>':''}${FEAT.records?'<button class="alt" id="bRec">기록</button>':''}</div>`:''}`;
   if(FEAT.special||FEAT.switch)$('mapSel').onchange=e=>{curKey=e.target.value;newWorld();};if(FEAT.diff)$('diffSel').onchange=e=>{diffKey=e.target.value;try{localStorage.setItem('box-diff',diffKey);}catch(err){}};
-  $('bHide').onclick=()=>start('hide');$('bSeek').onclick=()=>start('seek');if(FEAT.editor)$('bEdit').onclick=()=>openEditor();if(FEAT.records)$('bRec').onclick=()=>showRecords();$('bHide').focus();}
+  $('bHide').onclick=()=>start('hide');$('bSeek').onclick=()=>start('seek');$('bHost').onclick=()=>netOpen('host');$('bJoin').onclick=()=>netOpen('hider');if(FEAT.editor)$('bEdit').onclick=()=>openEditor();if(FEAT.records)$('bRec').onclick=()=>showRecords();$('bHide').focus();}
 
 function showRecords(){const rows=records.map(r=>`<tr><td>${r.date}</td><td>${r.mode==='hide'?'숨기':'찾기'}</td><td>${r.map}</td><td>${r.diff||''}</td><td>${r.win?'통과':'실패'}</td><td>${r.detail}</td></tr>`).join('');
   const best=k=>{const w=records.filter(r=>r.mode===k&&r.win);return w.length?w.reduce((a,b)=>b.score>a.score?b:a):null;};const bh=best('hide'),bs=best('seek');
@@ -476,13 +485,15 @@ function showRecords(){const rows=records.map(r=>`<tr><td>${r.date}</td><td>${r.
   <div class="row"><button id="recBack">메뉴로</button><button class="alt" id="recClear"${records.length?'':' disabled'}>기록 지우기</button></div>`;
   $('recBack').onclick=()=>menu();$('recClear').onclick=()=>{records=[];try{localStorage.removeItem('box-records');}catch(e){}showRecords();};$('recBack').focus();}
 
-function end(win,text,score){if(over)return;over=true;ring.visible=laser.visible=false;$('pauseBtn').hidden=true;touchUi(null);
+function end(win,text,score){if(over)return;over=true;if(net&&net.role==='host')netPush({ph:'end',res:text,win:!!win});ring.visible=laser.visible=false;$('pauseBtn').hidden=true;touchUi(null);
   if(mode==='hide')recSave(win);
   const d=new Date();saveRecord({date:`${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`,mode,map:curEntry().name,diff:DIFF[diffKey].name,win,detail:text,score:score||0});
   $('panel').hidden=false;$('panelBox').innerHTML=`<h1>${win?'통과':'실패'}</h1><p>${text}</p><div class="row"><button id="again">한 판 더</button><button class="alt" id="swap">반대쪽으로</button><button class="alt" id="toMenu">메뉴로</button>${FEAT.records?'<button class="alt" id="toRec">기록</button>':''}</div>`;
+  if(net){$('swap').hidden=true;$('again').textContent=net.role==='host'?'방으로(한 판 더)':'다음 판 기다리기';$('again').onclick=()=>netLobby();$('toMenu').onclick=()=>menu();$('again').focus();return;}
   $('again').onclick=()=>start(mode);$('swap').onclick=()=>start(mode==='hide'?'seek':'hide');$('toMenu').onclick=()=>menu();if(FEAT.records)$('toRec').onclick=()=>menu('records');$('again').focus();}
 function pause(){if(over||!mode||mode==='edit'||paused)return;paused=true;$('panel').hidden=false;
   $('panelBox').innerHTML=`<h1>일시정지</h1><div class="row"><button id="resume">계속하기</button><button class="alt" id="restart">처음부터</button><button class="alt" id="quit">메뉴로 나가기</button></div><p>나가면 이번 판은 기록되지 않아요.</p>`;
+  if(net)$('restart').hidden=true;
   $('resume').onclick=resume;$('restart').onclick=()=>start(mode);$('quit').onclick=()=>menu();$('resume').focus();}
 function resume(){paused=false;$('panel').hidden=true;}
 $('pauseBtn').onclick=pause;$('tPause').onclick=pause;
@@ -496,7 +507,7 @@ function updHud(){$('timeL').textContent=Math.max(0,Math.ceil(time))+'초';
 const KD={KeyD:0,ArrowRight:0,KeyS:1,ArrowDown:1,KeyA:2,ArrowLeft:2,KeyW:3,ArrowUp:3};
 // 넘어가는 0.38초 중에 누른 건 버리지 않고 하나 기억했다가 다 넘어가면 바로 한다(0.3초 안에 누른 것만)
 let hopQ=null;
-function playerHop(h){if(mode!=='hide'||over||paused||!player||player.hold>0)return;if(world.midMove(player)){hopQ={h,t:performance.now()};return;}hopQ=null;const sd=stampDir(world,player,player.stamp),sw=(()=>{const [x,y]=world.pos(player);return world.isSwitch(Math.round(x),Math.round(y));})();if(world.hop(player,h))recHop(sd<0?0:(h===sd?1:-1),sw,!!(player.slide&&player.slide.hid));}
+function playerHop(h){if(mode!=='hide'||over||paused||!player||player.hold>0)return;if(world.midMove(player)){hopQ={h,t:performance.now()};return;}hopQ=null;const sd=stampDir(world,player,player.stamp),sw=(()=>{const [x,y]=world.pos(player);return world.isSwitch(Math.round(x),Math.round(y));})();if(world.hop(player,h)){recHop(sd<0?0:(h===sd?1:-1),sw,!!(player.slide&&player.slide.hid));if(net&&net.role==='hider')netHop(h);}}
 // 키보드·스와이프·버튼이 모두 이 함수로: 옆 방향이면 레일 넘어가기, 진행/반대 방향이면 (속도 켬일 때만) 덜컹
 function hideInput(h){if(mode!=='hide'||over||paused||!player||player.pending)return;if(h%2!==player.d%2)playerHop(h);else if(FEAT.speed)world.thud(player,false);}
 function fake(){if(!FEAT.fake||mode!=='hide'||over||paused||!fakes||player.hold>0||player.pending)return;fakes--;player.hold=1.5;player.fakeT=1.5;const m=meshes.get(player);if(m)m.bump=1.5;say('덜컹… (걸린 척)');updHud();}
@@ -664,22 +675,92 @@ $('editDone').onclick=()=>{const str=mapToStr({tiles:ed.tiles});const f=ed.tiles
   $('loadMap').onclick=()=>{const v=$('shareTxt').value.trim();try{const m=parseMap(v);if(!m.tiles.flat().some(Boolean))throw 0;custom=v;try{localStorage.setItem('box-custom',custom);}catch(e){}curKey='custom';openEditor();}catch(err){say('문자열을 읽지 못했어요');}};
   $('backEd').onclick=()=>openEditor();$('edMenu').onclick=()=>menu();};
 
+// ---------- 친구와 하기 ----------
+// 실시간 방(room)의 presence만 쓴다. 직원(방장)이 판 전체를 돌리고 0.1초마다 상태를 presence에 싣는다(snap).
+// 상자 쪽은 같은 맵을 puppet 세계로 띄워 벨트만 굴리며 snap으로 덮어쓰고, 넘어가기는 바로 보여 주면서 presence q로 직원에게 보낸다.
+// 방장 presence {role:'host', ph:'lobby'|'play'|'end', map, ep, as:[[peer, 상자 id]], snap, res, win}
+// 상자 presence {role:'hider', host: 방장 peer, q:[[번호, 방향]]}
+const NET_MAX=3;let net=null,ROOM=null,roomState='wait';
+(async()=>{try{const c=window.claude;if(!c||!c.use){roomState='none';return;}ROOM=await c.use('room');roomState=ROOM?'ok':'none';}catch(e){roomState='none';}if(mode===null&&$('netNote'))$('netNote').textContent=netNote();})();
+function netNote(){return roomState==='none'?'실시간 방에 연결할 수 없어요. claude.ai에 로그인해서 연 링크(초대받은 사람)끼리만 돼요.':roomState==='wait'?'방 연결 확인 중…':'같은 링크를 연 사람끼리. 한 명이 직원으로 방을 열고, 나머지는 상자로 들어가요(최대 3명, 빈자리는 AI).';}
+const myPeer=()=>{const m=ROOM&&ROOM.peers().find(p=>p.sameTab);return m?m.peer:null;};
+function netPush(patch){if(!net)return;Object.assign(net.me,patch);ROOM.presence(patch).catch(e=>{if(e&&e.code==='invalid_argument')console.warn('presence',e.message);});}
+function netOpen(role){if(!ROOM){say(roomState==='wait'?'방 연결 확인 중이에요. 잠시 뒤 다시':'실시간 방에 연결할 수 없어요',2.5);return;}
+  if(net)netLeave();net={role,me:{},ep:0,seen:{},q:[],seq:0,hopAt:0,host:null,snapT:0,frozen:false};
+  net.unsub=ROOM.onPeers(ch=>netPeers(ch.peers));
+  netPush(role==='host'?{role:'host',ph:'lobby',map:curKey,ep:0,as:[],snap:null,res:null,q:null,host:null}:{role:'hider',host:null,q:[],ph:null,as:null,snap:null,map:null,res:null});netLobby();}
+function netLeave(){if(!net)return;const n=net;net=null;if(n.unsub)n.unsub();ROOM.presence({role:null,ph:null,as:null,snap:null,q:null,host:null,map:null,res:null,win:null,ep:null}).catch(()=>{});}
+function hidersOf(peers){return peers.filter(p=>!p.sameTab&&p.presence&&p.presence.role==='hider'&&p.presence.host===myPeer());}
+function netLobby(){if(!net)return;mode=null;over=true;paused=false;hideMarks();touchUi(null);clearStamps();['hideTools','seekTools','editTools','pauseBtn','susWrap','timeWrap'].forEach(id=>$(id).hidden=true);$('goalL').textContent='';
+  $('modeL').innerHTML='<b>친구와 하기</b>';if(!world||world.puppet)newWorld();$('panel').hidden=false;
+  if(net.role==='host'){netPush({ph:'lobby',map:curKey,snap:null,res:null});
+    $('panelBox').innerHTML=`<h1>직원 방</h1><p id="lobbyL"></p><div class="row"><button id="netGo">시작</button><button class="alt" id="toMenu">나가기</button></div>`;$('netGo').onclick=netStart;}
+  else{$('panelBox').innerHTML=`<h1>상자로 대기</h1><p id="lobbyL">직원 방 찾는 중…</p><div class="row"><button class="alt" id="toMenu">나가기</button></div>`;}
+  $('toMenu').onclick=()=>menu();netPeers(ROOM.peers());}
+function netStart(){if(!net||net.role!=='host')return;const hs=hidersOf(ROOM.peers()).slice(0,NET_MAX);start('seek');if(mode!=='seek')return;
+  net.ep=Date.now()%1e9; // 방을 새로 열어도 겹치지 않는 판 번호
+  const as=[];hs.forEach((p,i)=>{const b=bots[i];b.remote=p.peer;b.src='friend';as.push([p.peer,b.id]);net.seen[p.peer]=Math.max(0,...((p.presence.q||[]).map(x=>x[0])));});
+  net.snapT=0;netPush({ph:'play',map:curKey,ep:net.ep,as,snap:netSnap(),res:null,win:null});}
+function netSnap(){world.boxes.forEach(b=>{const m=meshes.get(b);b.alert=!!(m&&m.alert);});
+  return {t:+time.toFixed(1),L:world.light,lt:+world.lightT.toFixed(2),pz:paused?1:0,bx:world.packBoxes(),po:pool.map(s=>[s.id,s.x,s.y,+s.t.toFixed(1)]),hs:bots.map(b=>[b.id,b.got|0,[...(b.took||[])],b.found?1:0,b.gone?1:0]),sc:[found,escaped,scans]};}
+function remoteHop(b,h){if(b.found||b.gone||b.pending||mode!=='seek'||over)return;if(world.midMove(b)){b.q={h,t:performance.now()};return;}if(h%2!==b.d%2)world.hop(b,h);}
+function netHop(h){net.hopAt=performance.now();net.q=[...net.q,[++net.seq,h]].slice(-8);netPush({q:net.q});}
+function netPeers(peers){if(!net)return;
+  if(net.role==='host'){const hs=hidersOf(peers);
+    if(mode===null&&$('lobbyL'))$('lobbyL').textContent=hs.length?`상자 ${hs.length}명 들어옴${hs.length>NET_MAX?` (앞의 ${NET_MAX}명만 이번 판)`:''}. 빈자리 ${Math.max(0,NET_MAX-hs.length)}개는 AI가 채워요.`:'아직 아무도 없어요. 같은 링크를 연 친구가 "상자로 들어가기"를 누르면 여기 떠요. 혼자 시작하면 AI 셋.';
+    if(mode!=='seek'||over)return;
+    for(const b of bots){if(!b.remote)continue;const p=peers.find(x=>x.peer===b.remote);
+      if(!p||!p.presence||p.presence.role!=='hider'){b.remote=null;b.src=null;botPlan(b);say('상자 한 명이 나갔어요. AI가 이어받아요',2);continue;}
+      for(const [n,h] of (p.presence.q||[]))if(n>(net.seen[b.remote]||0)){net.seen[b.remote]=n;remoteHop(b,h);}}
+    return;}
+  // 상자 쪽
+  let host=net.host&&peers.find(p=>p.peer===net.host&&p.presence&&p.presence.role==='host');
+  if(!host){if(net.host&&mode==='hide'&&!over){end(false,'직원이 나갔어요.');}net.host=null;host=peers.find(p=>!p.sameTab&&p.presence&&p.presence.role==='host');if(host){net.host=host.peer;netPush({host:host.peer});}}
+  const P=host?host.presence:null;
+  if(mode===null&&$('lobbyL'))$('lobbyL').textContent=!host?'직원 방 찾는 중… 친구가 "직원으로 방 열기"를 눌러야 해요.':P.ph==='play'&&!(P.as||[]).some(a=>a[0]===myPeer())?'이번 판은 이미 시작했어요. 다음 판에 들어가요.':'직원 방에 들어왔어요. 직원이 시작하면 바로 시작해요.';
+  if(!P)return;
+  if(P.ph==='play'&&P.ep!==net.ep&&P.snap){const a=(P.as||[]).find(x=>x[0]===myPeer());if(a&&(mode===null||over)){net.ep=P.ep;startRemote(P.map,a[1],P.snap);}return;}
+  if(P.ep!==net.ep||mode!=='hide')return;
+  if(P.ph==='play'&&P.snap)applySnap(P.snap);
+  else if(P.ph==='end'&&!over){if(P.snap)applySnap(P.snap);if(!over)end(false,'판 끝. '+(P.res||''));} // 상자 쪽은 내가 코인을 다 모아 빠져나가야 통과
+  else if(P.ph==='lobby'&&!over)end(false,'직원이 판을 끝냈어요.');}
+function startRemote(mapKey,id,snap){goFull();initSound();if(mapList().some(m=>m.k===mapKey))curKey=mapKey;mode='hide';over=false;paused=false;
+  world=createWorld(curEntry().str,Object.assign(wopt(),{puppet:true}));buildTiles(world.tiles);clearMeshes();fitCam();clearStamps();pool=[];
+  goal=STAMPS;time=snap.t;scans=6;found=0;escaped=0;fakes=0;hunt={t:0,target:null,aim:0,scans:snap.sc[2],stun:0};bots=[];hideMarks();rec=null;hopQ=null;
+  world.loadBoxes(snap.bx);world.light=snap.L;world.lightT=snap.lt;player=world.boxes.find(b=>b.id===id);player.kind='player';player.got=0;player.took=new Set();
+  meArrow.visible=true;applySnap(snap);
+  $('panel').hidden=true;$('susWrap').hidden=true;$('hideTools').hidden=false;$('seekTools').hidden=true;$('editTools').hidden=true;$('timeWrap').hidden=false;$('pauseBtn').hidden=false;touchUi('hide');
+  document.querySelectorAll('[data-hop]').forEach(b=>b.hidden=!FEAT.speed&&(+b.dataset.hop%2===0));$('fakeBtn').hidden=true;
+  $('modeL').innerHTML=`<b>상자</b> · 친구와 · ${curEntry().name}`;cv.style.cursor='default';say('친구 직원이 찾는다. 코인 4개!',2);updHud();}
+const redMat=M('#d6322a');
+function applySnap(s){if(!world||!world.puppet||!player)return;time=s.t;net.frozen=!!s.pz;
+  if(world.light!==s.L)world.setLight(s.L);world.lightT=s.lt;
+  world.loadBoxes(s.bx,b=>b===player&&performance.now()-net.hopAt<700); // 방금 내가 넘어간 건 직원 화면에 닿을 때까지 내 화면 그대로
+  world.boxes.forEach(b=>{const m=meshFor(b);if(b.alert)alertOn(b);if(b.found&&!m.red){m.red=1;m.body.material=redMat;}});
+  const ids=new Set(s.po.map(a=>a[0]));pool=pool.filter(c=>{if(ids.has(c.id))return true;S.remove(c.mesh);stampMeshes=stampMeshes.filter(g=>g!==c.mesh);return false;});
+  for(const [id,x,y,t] of s.po){let c=pool.find(o=>o.id===id);if(!c){c={id,x,y,t,mesh:stampMesh()};pool.push(c);}c.x=x;c.y=y;c.t=t;c.mesh.position.set(wx(x),0,wz(y));}
+  hunt.scans=s.sc[2];const me=s.hs.find(h=>h[0]===player.id);
+  if(me){if(me[1]>player.got)say(`코인 ${me[1]}/${goal}`);player.got=me[1];player.took=new Set(me[2]);poolAim(player);
+    if(me[3]&&!over){end(false,`코인 ${player.got}/${goal}에서 직원에게 찍힘.`,player.got*100);return;}
+    if(me[4]&&!over){end(true,`코인 ${goal}개 모으고 빠져나감.`,1000);return;}}}
+
 // ---------- 루프 ----------
 let last=performance.now();
-function frame(now){const dt=Math.min(.05,(now-last)/1000);last=now;
-  if(world&&mode!=='edit'&&!paused){const live=(mode==='hide'||mode==='seek')&&!over;
+function frame(now){const dt=Math.min(.05,(now-last)/1000);last=now;const cl=!!(net&&net.role==='hider'&&mode==='hide'); // 친구와 하기의 상자 쪽: 규칙은 직원 화면이 정한다
+  if(world&&mode!=='edit'&&!paused&&!(cl&&net.frozen)){const live=(mode==='hide'||mode==='seek')&&!over;
     if(live){time-=dt;
       if(FEAT.speed&&mode==='hide'&&player&&!player.pending){let k=0;Object.keys(KD).forEach(code=>{if(keys[code]){const h=KD[code];if(h===player.d)k=1;else if(h===(player.d+2)%4)k=-1;}});
         player.mul=k>0?1.45:k<0?.6:1;if(k&&world.light==='red')sus(player,dt*3);}
-      if(mode==='seek')bots.forEach(b=>{if(!b.T0)b.T0=time;botThink(b,dt);});}
+      if(mode==='seek')bots.forEach(b=>{if(!b.T0)b.T0=time;if(b.remote){if(b.q&&!world.midMove(b)){const q=b.q;b.q=null;if(performance.now()-q.t<400)remoteHop(b,q.h);}}else botThink(b,dt);});
+      if(mode==='seek'&&net&&net.role==='host'&&(net.snapT-=dt)<=0){net.snapT=.1;netPush({snap:netSnap()});}}
     // 터널에 들어간 줄과 나온 줄이 다르면 직원이 놓친다: 의심 0
-    if(live&&mode==='hide'&&world.isTunnel)world.boxes.forEach(b=>{if(b.gone||b.pending)return;const it=inTun(b);if(it&&!b.wasTun)b.tunY=b.cy;if(!it&&b.wasTun&&b.tunY!=null&&b.cy!==b.tunY){b.sus=0;if(b===player)say('직원이 놓쳤다',1.2);}b.wasTun=it;});
+    if(live&&mode==='hide'&&!cl&&world.isTunnel)world.boxes.forEach(b=>{if(b.gone||b.pending)return;const it=inTun(b);if(it&&!b.wasTun)b.tunY=b.cy;if(!it&&b.wasTun&&b.tunY!=null&&b.cy!==b.tunY){b.sus=0;if(b===player)say('직원이 놓쳤다',1.2);}b.wasTun=it;});
     if(live&&mode==='hide'&&hopQ&&player&&!world.midMove(player)){const q=hopQ;hopQ=null;if(performance.now()-q.t<300)playerHop(q.h);}
-    if(live&&mode==='hide'){sig(world,dt);
+    if(cl){}else if(live&&mode==='hide'){sig(world,dt);
       const s=player.stamp;if(s&&world.light==='green'&&world.lightT>.6&&world.boxes.some(b=>!b.gone&&!b.pending&&Math.abs(b.cx-s[0])<=1&&Math.abs(b.cy-s[1])<=1)&&Math.random()<dt*.9)world.setLight('yellow');}
     else if(live&&mode==='seek')seekSignal(dt);else if(!live)idleSig(world,dt);
     // 분기 갈래: 도장 수명. 다 되면 다른 곳으로 옮겨 간다(존버 방지)
-    if(live&&FEAT.switch&&!over){pool.forEach((s,i)=>{s.t-=dt;if(s.t<=0){const n=poolNew();if(n){S.remove(s.mesh);stampMeshes=stampMeshes.filter(g=>g!==s.mesh);pool[i]=n;}else s.t=STAMP_LIFE;}}); // 빈 자리가 없으면 그 코인을 그대로 둔다
+    if(live&&FEAT.switch&&!over&&!cl){pool.forEach((s,i)=>{s.t-=dt;if(s.t<=0){const n=poolNew();if(n){S.remove(s.mesh);stampMeshes=stampMeshes.filter(g=>g!==s.mesh);pool[i]=n;}else s.t=STAMP_LIFE;}}); // 빈 자리가 없으면 그 코인을 그대로 둔다
       (mode==='hide'?[player]:bots).forEach(b=>{if(!b||b.gone||b.found||b.pending||over)return;b.took=b.took||new Set();
         for(const s of pool){if(b.took.has(s.id)||!onStamp(world,b,[s.x,s.y]))continue;b.took.add(s.id);b.got++;
           if(b===player){say(`코인 ${b.got}/${goal}`);if(b.got>=goal){end(true,`${Math.round((performance.now()-t0)/1000)}초 만에 코인 ${goal}개, 직원 스캔 ${hunt.scans}번 남음.`,1000+Math.max(0,time)*10);return;}}
@@ -716,8 +797,8 @@ function frame(now){const dt=Math.min(.05,(now-last)/1000);last=now;
     const hv=!!(hover&&mode==='seek'&&!over&&!hover.gone&&!hover.found);hoverRing.visible=hv;if(hv){const [hx,hy]=world.pos(hover);hoverRing.position.set(wx(hx),.42,wz(hy));}
     if(mode==='hide'&&player&&!player.pending){const [x,y]=world.pos(player);const X=wx(x),Z=wz(y),h=player.size*.8+.33;
       meArrow.position.set(X,h+1.4+.35*Math.sin(now/220),Z);meArrow.quaternion.copy(cam.quaternion);meArrow.scale.setScalar(1.35);
-      if(live)huntStep(dt);}
-    if(live&&time<=0){if(mode==='hide')end(false,`시간 끝. 코인 ${player.got}/${goal}.`,player.got*100);else end(false,`시간 끝. 찾음 ${found}, 놓침 ${escaped}.`,found*1000);}
+      if(live&&!cl)huntStep(dt);}
+    if(live&&!cl&&time<=0){if(mode==='hide')end(false,`시간 끝. 코인 ${player.got}/${goal}.`,player.got*100);else end(false,`시간 끝. 찾음 ${found}, 놓침 ${escaped}.`,found*1000);}
     if(live)updHud();}
   if(msgT>0){msgT-=dt;if(msgT<=0)$('msg').hidden=true;}
   if(follow&&mode==='hide'&&player&&!player.pending){const [px]=world.pos(player);const tx=Math.max(follow.min,Math.min(follow.max,wx(px)));follow.cx+=(tx-follow.cx)*Math.min(1,dt*4);
@@ -727,7 +808,7 @@ function frame(now){const dt=Math.min(.05,(now-last)/1000);last=now;
     e.hidden=!show;}
   R.render(S,cam);requestAnimationFrame(frame);}
 // 테스트용 들여다보기(화면 흐름 테스트가 씀)
-window.__box={s2w:(x,y)=>screenToWorld(x,y),human:{get plays(){return humanPlays.length;},get windows(){return humanWins().length;},get src(){return humanSrc;}},get bots(){return bots;},get mode(){return mode;},get player(){return player;},get world(){return world;},get over(){return over;},FEAT};
+window.__box={s2w:(x,y)=>screenToWorld(x,y),human:{get plays(){return humanPlays.length;},get windows(){return humanWins().length;},get src(){return humanSrc;}},get bots(){return bots;},get mode(){return mode;},get player(){return player;},get world(){return world;},get over(){return over;},get net(){return net;},get time(){return time;},FEAT};
 resize();menu();requestAnimationFrame(frame);
 })();
 </script>

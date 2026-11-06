@@ -49,7 +49,9 @@ function createWorld(str,opt){opt=opt||{};const rng=opt.rng||Math.random;const {
   const spawns=cells.filter(([x,y])=>tiles[y][x].t==='spawn');
   // colorsOn=false(v12 기본): 일반 상자는 초록 때 무작위로 옆 레일, 출고구는 색 상관없이 받는다
   const colorsOn=opt.colors!==false;
-  const w={W,H,tiles,colors,diff,colorsOn,boxes:[],t:0,light:'green',lightT:0,sortOn:true,win:0,events:[]};
+  // puppet: 친구와 하기의 상자 쪽 화면. 일반 상자의 결정·재입고는 직원(방장) 화면이 하고, 여기선 벨트만 굴리며 받은 상태로 덮어쓴다
+  const puppet=!!opt.puppet;
+  const w={W,H,tiles,colors,diff,colorsOn,puppet,boxes:[],t:0,light:'green',lightT:0,sortOn:true,win:0,events:[]};
   const T=(x,y)=>(x>=0&&y>=0&&x<W&&y<H)?tiles[y][x]:null;w.T=T;
   const wrap=(x,y)=>[(x+W)%W,(y+H)%H];
   const hopable=t=>t&&t.t!=='turn'&&t.t!=='exit';
@@ -84,7 +86,7 @@ function createWorld(str,opt){opt=opt||{};const rng=opt.rng||Math.random;const {
   w.center=(x,y)=>[x,y];
   w.pos=b=>{let x=b.cx+DX[b.d]*b.s,y=b.cy+DY[b.d]*b.s;if(b.slide){const k=1-Math.min(1,b.slide.t);x+=b.slide.ox*k;y+=b.slide.oy*k;}return [x,y];};
   w.midMove=b=>!!(b.slide&&b.slide.t<1);
-  function respawn(b){const free=spawns.filter(([x,y])=>!w.boxes.some(o=>o!==b&&!o.gone&&!o.pending&&Math.hypot(o.cx+DX[o.d]*o.s-x,o.cy+DY[o.d]*o.s-y)<1));
+  function respawn(b){if(puppet){b.pending=true;return;}const free=spawns.filter(([x,y])=>!w.boxes.some(o=>o!==b&&!o.gone&&!o.pending&&Math.hypot(o.cx+DX[o.d]*o.s-x,o.cy+DY[o.d]*o.s-y)<1));
     if(!free.length){b.pending=true;return;}const [x,y]=free[(rng()*free.length)|0];b.cx=x;b.cy=y;b.d=tiles[y][x].d;b.s=0;b.pending=false;b.slide=null;}
   // 칸 중앙 도착: 다음 방향을 정한다
   function arrive(b){const t=tiles[b.cy][b.cx];
@@ -113,11 +115,11 @@ function createWorld(str,opt){opt=opt||{};const rng=opt.rng||Math.random;const {
     // NPC: 초록일 때 흩어져서 한 줄, 노랑일 땐 아주 가끔 늦게(=걸릴 수 있음)
     const rate=(w.light==='green'?(colorsOn?1.3:WANDER):w.light==='yellow'?w.diff.late:0);
     // 분기 칸 맵: 일반 상자는 분기 칸(과 미끼 자리)에 들어선 직후 한 번만 정한다. 노랑이면 아주 가끔 늦게(late).
-    if(w.hasSwitches)for(const b of w.boxes){if(b.kind!=='npc'||b.gone||b.pending||w.midMove(b))continue;if(b.tunPass&&!w.isTunnel(b.cx,b.cy))b.tunPass=false;if(b.s>.5)continue;const key=b.cx+','+b.cy;if(b.swKey===key)continue;
+    if(w.hasSwitches&&!puppet)for(const b of w.boxes){if(b.kind!=='npc'||b.gone||b.pending||w.midMove(b))continue;if(b.tunPass&&!w.isTunnel(b.cx,b.cy))b.tunPass=false;if(b.s>.5)continue;const key=b.cx+','+b.cy;if(b.swKey===key)continue;
       if(w.isTunnel(b.cx,b.cy)){b.swKey=key;if(!b.tunPass){b.tunPass=true;if(rng()<TUN_P){const h=w.tunSide(b);if(h>=0)w.hop(b,h);}}continue;} // 터널 안: 신호와 상관없이 가끔 갈아탐
       const sw=w.isSwitch(b.cx,b.cy),bait=!sw&&w.nearSwitch(b.cx,b.cy);if(!sw&&!bait)continue;b.swKey=key;
       const ok=w.light==='green'||(w.light==='yellow'&&rng()<w.diff.late);if(ok&&rng()<(sw?SW_P:SW_BAIT)){const h=w.randSide(b);if(h>=0)w.hop(b,h);}}
-    if(rate>0&&!w.hasSwitches)for(const b of w.boxes){if(b.kind!=='npc'||b.gone||b.pending||w.midMove(b)||b.lastWin===w.win)continue;if(rng()<dt*rate){const h=colorsOn?w.bestSide(b,b.cx,b.cy):w.randSide(b);if(h>=0)w.hop(b,h);}}
+    if(rate>0&&!w.hasSwitches&&!puppet)for(const b of w.boxes){if(b.kind!=='npc'||b.gone||b.pending||w.midMove(b)||b.lastWin===w.win)continue;if(rng()<dt*rate){const h=colorsOn?w.bestSide(b,b.cx,b.cy):w.randSide(b);if(h>=0)w.hop(b,h);}}
     // 차간 거리
     const P=w.boxes.map(b=>(b.gone||b.pending)?null:w.pos(b));
     w.boxes.forEach((b,i)=>{b.follow=1;if(!P[i])return;const hx=DX[b.d],hy=DY[b.d];
@@ -134,6 +136,13 @@ function createWorld(str,opt){opt=opt||{};const rng=opt.rng||Math.random;const {
         if(tiles[b.cy][b.cx].t==='jam'&&!w.jamOpen(b.cx,b.cy)){s=0;break;}}
       if(!b.pending)b.s=s;}
   };
+  // 친구와 하기: 상자 상태를 짧은 배열로 주고받는다 [id,cx,cy,d,s,크기,무늬,상태비트,slide t,ox,oy]
+  w.packBoxes=function(){return w.boxes.map(b=>{const f=(b.gone?1:0)|(b.pending?2:0)|(b.found?4:0)|(b.alert?8:0)|(b.slide&&b.slide.hid?16:0);const a=[b.id,b.cx,b.cy,b.d,+b.s.toFixed(3),b.size,b.pat|0,f];
+    if(b.slide&&b.slide.t<1)a.push(+b.slide.t.toFixed(2),+b.slide.ox.toFixed(2),+b.slide.oy.toFixed(2));return a;});};
+  w.loadBoxes=function(arr,keep){for(const a of arr){let b=w.boxes.find(o=>o.id===a[0]);
+      if(!b){b={id:a[0],kind:'npc',dest:0,mul:1,follow:1,sus:0,deliv:0,hold:0,fakeT:0,lastWin:-1,slide:null};w.boxes.push(b);}
+      const f=a[7];b.size=a[5];b.pat=a[6];b.gone=!!(f&1);b.found=!!(f&4);b.alert=!!(f&8);if(keep&&keep(b))continue;
+      b.cx=a[1];b.cy=a[2];b.d=a[3];b.s=a[4];b.pending=!!(f&2);b.slide=a.length>8?{t:a[8],ox:a[9],oy:a[10],hid:!!(f&16)}:null;}};
   return w;}
 // 직원(AI)의 신호 조작: 초록 길이는 들쭉날쭉, 가끔 짧게 끊는 낚시
 function signalAI(diff,rng){rng=rng||Math.random;const r=(a)=>a[0]+rng()*(a[1]-a[0]);let next=r(diff.green);

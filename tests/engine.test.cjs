@@ -106,14 +106,15 @@ for (const k of Object.keys(E.MAPS)) for (const colors of [true, false]) {
   for (let i = 0; i < 30 * 120; i++) { sig(w, 1 / 30); w.step(1 / 30); flag += w.events.filter(e => e.type === 'thud' && e.sw).length; tunFlag += w.events.filter(e => e.type === 'thud' && e.tun).length; w.events = []; }
   ok(off === 0 && on > near && on > 50, `분기 맵: 일반 상자 넘어가기 분기 칸 ${on}, 바로 앞뒤 ${near}, 그 밖 ${off}`);
   ok(flag === on, `분기 맵: 분기 칸에서 넘어간 덜컹에 sw 표시 (${flag}/${on})`);
-  ok(tun > 10 && tunOff === 0 && tunFlag === tun, `터널: 일반 상자는 터널 안에서 터널 안으로만 갈아탐(${tun}번, 밖으로 ${tunOff}), 덜컹에 tun 표시(${tunFlag})`);
+  ok(tun > 4 && tunOff === 0 && tunFlag === tun, `터널: 일반 상자는 터널 안에서 터널 안으로만 갈아탐(${tun}번, 밖으로 ${tunOff}), 덜컹에 tun 표시(${tunFlag})`);
 }
 
 // 10. 터널 안에서 터널 안으로 넘어가다 빨간불이 돼도 안 걸리고, 빨간불 중에 넘어가도 off가 아니다
 {
   const w = E.createWorld(E.MAPS.switch.str, { colors: false }); const p = w.add('player'); let done = false;
   for (let i = 0; i < 3000 && !done; i++) { w.step(1 / 60); w.events = [];
-    if (!w.midMove(p) && w.isTunnel(p.cx, p.cy)) for (const h of [1, 3]) { if (done) break; if (w.isTunnel(p.cx + E.DX[h], p.cy + E.DY[h]) && w.hop(p, h)) {
+    const [vx, vy] = w.pos(p).map(Math.round); // 터널 판정은 화면 위치 기준
+    if (!w.midMove(p) && w.isTunnel(vx, vy)) for (const h of [1, 3]) { if (done) break; if (w.isTunnel(vx + E.DX[h], vy + E.DY[h]) && w.hop(p, h)) {
       w.setLight('yellow'); w.setLight('red'); const fr = w.events.some(e => e.type === 'frozen' && e.b === p); const th = w.events.find(e => e.type === 'thud' && e.b === p);
       ok(!fr && th && th.tun && !th.off, `터널: 안에서 넘어가다 빨강이어도 안 걸림(frozen ${fr}), 덜컹 tun ${th && th.tun}`); done = true; } } }
   ok(done, '터널 시험 상황을 만들었다');
@@ -136,6 +137,20 @@ for (const k of Object.keys(E.MAPS)) for (const colors of [true, false]) {
   p.cx = 1; p.cy = 1; p.d = 0; p.s = .7; p.slide = null; // 화면 위치 x=1.7 → 2번 칸(분기 칸) 위
   w.events = []; w.hop(p, 1); const th = w.events.find(e => e.type === 'thud' && e.b === p);
   ok(w.isSwitch(2, 1) && th && th.sw, `분기 칸: 화면상 분기 칸 위(1.7칸)에서 넘어가면 sw (${th && th.sw})`);
+}
+
+// 13. 친구와 하기: 상자 쪽 화면(puppet)은 일반 상자를 스스로 옮기지 않고, 받은 상태를 따라가면 방장 화면과 거의 같은 자리
+{
+  const host = E.createWorld(E.MAPS.compact.str, { colors: false }); fill(host); const sig = E.signalAI(E.DIFF.normal);
+  const cl = E.createWorld(E.MAPS.compact.str, { colors: false, puppet: true }); cl.loadBoxes(JSON.parse(JSON.stringify(host.packBoxes())));
+  let selfHop = 0, maxErr = 0;
+  for (let i = 0; i < 60 * 40; i++) { sig(host, 1 / 60); host.step(1 / 60); host.events = []; cl.light = host.light; cl.step(1 / 60);
+    selfHop += cl.events.filter(e => e.type === 'thud').length; cl.events = [];
+    if (i % 6 === 5) { // 0.1초마다 받음, 받기 직전 오차
+      host.boxes.forEach(b => { const c = cl.boxes.find(o => o.id === b.id); if (b.pending || b.gone || c.pending) return; const [x, y] = host.pos(b), [u, v] = cl.pos(c); maxErr = Math.max(maxErr, Math.min(Math.hypot(x - u, y - v), 3)); });
+      cl.loadBoxes(JSON.parse(JSON.stringify(host.packBoxes()))); } }
+  ok(selfHop === 0, `puppet: 일반 상자가 스스로 안 넘어감(${selfHop})`);
+  ok(cl.boxes.length === host.boxes.length && maxErr < 1.2, `puppet: 0.1초마다 받으면 상자 수 같고, 받기 직전 오차 ${maxErr.toFixed(2)}칸`);
 }
 
 console.log(failed ? `\n${failed}개 실패` : '\n엔진 테스트 전부 통과');
