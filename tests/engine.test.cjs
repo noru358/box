@@ -130,5 +130,13 @@ for (const k of Object.keys(E.MAPS)) for (const colors of [true, false]) {
   ok(del > 20 && sw > 5 && other < sw, `세로 맵: 출고 ${del}, 분기 칸 넘어가기 ${sw}, 터널 안 ${tun}, 그 밖(미끼) ${other}`);
 }
 
+// 12. 화면상 노란 분기 칸 위에서 넘어가면 sw로 친다(칸 번호는 한 칸 뒤일 수 있음)
+{
+  const w = E.createWorld(E.MAPS.compact.str, { colors: false }); const p = w.add('player');
+  p.cx = 1; p.cy = 1; p.d = 0; p.s = .7; p.slide = null; // 화면 위치 x=1.7 → 2번 칸(분기 칸) 위
+  w.events = []; w.hop(p, 1); const th = w.events.find(e => e.type === 'thud' && e.b === p);
+  ok(w.isSwitch(2, 1) && th && th.sw, `분기 칸: 화면상 분기 칸 위(1.7칸)에서 넘어가면 sw (${th && th.sw})`);
+}
+
 console.log(failed ? `\n${failed}개 실패` : '\n엔진 테스트 전부 통과');
 process.exit(failed ? 1 : 0);

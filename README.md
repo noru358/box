@@ -9,7 +9,7 @@
 - 버전: v13 (v12 덜어낸 판 + 분기 시험판 합침: 분기 칸, 터널, 띠 조명 신호, 공용 코인, 상자 무늬, 9칸 맵)
 - 플레이: `dist/index.html`을 브라우저로 열면 바로 된다. 인터넷 연결은 필요하다(three.js를 CDN에서 받음). 폰은 세로·가로 모두 된다.
 - 공개 링크(작업자 계정 비공개 아티팩트): https://claude.ai/artifact/K2fKfUXg8q79ACiVMjHk2c
-- 분기 시험판 링크(v13과 같은 판을 올려 둠, 예전 사람 기록이 여기 쌓여 있음): https://claude.ai/artifact/HqfaH4rcqod577ZwzGd5Lu
+- 분기 시험판 링크(옛 기록용, 더 갱신 안 함): https://claude.ai/artifact/HqfaH4rcqod577ZwzGd5Lu
 - 시험 갈래 `v12-stop`(벨트 정지 반응 시험, 접음, 브랜치만 남김): https://claude.ai/artifact/2veiV9GwGgzi8DjVwQRtTS
 
 ## 고치고 확인하는 법

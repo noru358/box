@@ -338,7 +338,7 @@ function updHud(){$('timeL').textContent=Math.max(0,Math.ceil(time))+'초';
 const KD={KeyD:0,ArrowRight:0,KeyS:1,ArrowDown:1,KeyA:2,ArrowLeft:2,KeyW:3,ArrowUp:3};
 // 넘어가는 0.38초 중에 누른 건 버리지 않고 하나 기억했다가 다 넘어가면 바로 한다(0.3초 안에 누른 것만)
 let hopQ=null;
-function playerHop(h){if(mode!=='hide'||over||paused||!player||player.hold>0)return;if(world.midMove(player)){hopQ={h,t:performance.now()};return;}hopQ=null;const sd=stampDir(world,player,player.stamp),sw=world.isSwitch(player.cx,player.cy);if(world.hop(player,h))recHop(sd<0?0:(h===sd?1:-1),sw,!!(player.slide&&player.slide.hid));}
+function playerHop(h){if(mode!=='hide'||over||paused||!player||player.hold>0)return;if(world.midMove(player)){hopQ={h,t:performance.now()};return;}hopQ=null;const sd=stampDir(world,player,player.stamp),sw=(()=>{const [x,y]=world.pos(player);return world.isSwitch(Math.round(x),Math.round(y));})();if(world.hop(player,h))recHop(sd<0?0:(h===sd?1:-1),sw,!!(player.slide&&player.slide.hid));}
 // 키보드·스와이프·버튼이 모두 이 함수로: 옆 방향이면 레일 넘어가기, 진행/반대 방향이면 (속도 켬일 때만) 덜컹
 function hideInput(h){if(mode!=='hide'||over||paused||!player||player.pending)return;if(h%2!==player.d%2)playerHop(h);else if(FEAT.speed)world.thud(player,false);}
 function fake(){if(!FEAT.fake||mode!=='hide'||over||paused||!fakes||player.hold>0||player.pending)return;fakes--;player.hold=1.5;player.fakeT=1.5;const m=meshes.get(player);if(m)m.bump=1.5;say('덜컹… (걸린 척)');updHud();}
@@ -453,7 +453,7 @@ function botThink(b,dt){if(b.found||b.gone||b.pending)return;if(!b.plan)botPlan(
   if(world.isTunnel&&inTun(b)){const h=stampDir(world,b,b.stamp),[bx,by]=world.pos(b);if(h>=0&&world.isTunnel(Math.round(bx+DX[h]),Math.round(by+DY[h]))&&Math.random()<dt*3){world.hop(b,h);return;}} // 터널 안이면 안 보이니 도장 쪽으로 갈아탐
   const hp=b.plan[b.pi];if(!hp)return;const L=world.light,lt=world.lightT;
   // 분기 칸에서 넘어간 움직임이면 분기 칸에 올 때까지 기다린다. 도장 수명이 3초 안 남았으면 그냥 지른다
-  const waitSw=FEAT.switch&&hp.sw===1&&hp.ph==='g'&&!world.isSwitch(b.cx,b.cy)&&!(b.stampT<3);
+  const waitSw=FEAT.switch&&hp.sw===1&&hp.ph==='g'&&!(()=>{const [x,y]=world.pos(b);return world.isSwitch(Math.round(x),Math.round(y));})()&&!(b.stampT<3);
   if(hp.ph==='g'){if(L==='green'){if(lt>=hp.t&&!waitSw)botHop(b,hp.dir);}
     else if(L==='yellow'&&lt<b.react)botHop(b,hp.dir); // 노랑을 아직 못 봤다
     else b.pi++;}
