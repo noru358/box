@@ -1,6 +1,6 @@
 // ===== 칸 그리기 =====
 // 칸 종류마다 그리는 법(TILE_LOOK). 규칙 쪽 등록표는 engine.js TILES. 새 칸 종류는 두 곳에 한 줄씩.
-// 모든 칸 = 바닥판(base 색) + 벨트면 양옆 띠 조명과 진행 화살표 + 종류별 덧그림(add).
+// 모든 칸 = 바닥판(base 색) + 벨트면 진행 화살표 + 종류별 덧그림(add). 신호는 칸이 아니라 바닥 조명 하나로(scene.js floorLight).
 // 도형·재질은 한 번만 만들어 같이 쓴다(맵을 다시 깔아도 새로 안 만듦).
 let world=null,W=14,H=6,tileG=new THREE.Group();S.add(tileG);
 const wx=x=>(x-(W-1)/2)*CS,wz=y=>(y-(H-1)/2)*CS;
@@ -8,7 +8,6 @@ const _geos={};const geo=(key,make)=>_geos[key]||(_geos[key]=make());
 const P=CS*.82;
 const triGeo=(()=>{const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute([.55,0,0,-.35,0,-.42,-.35,0,.42],3));return g;})();
 function arrow(d,color,ox=0,oz=0,s=1){const a=new THREE.Mesh(triGeo,B(color));a.rotation.y=-d*Math.PI/2;a.scale.setScalar(s);a.position.set(ox,.34,oz);return a;}
-const ledMat=new THREE.MeshBasicMaterial({color:'#35e06f'}); // 신호 띠 조명: 매 프레임 색이 바뀌므로 따로
 const box=(key,w,h,d,mat)=>new THREE.Mesh(geo(key,()=>new THREE.BoxGeometry(w,h,d)),mat);
 const TILE_LOOK={
   belt:{base:'#3a3936'},
@@ -26,7 +25,6 @@ function buildTiles(tiles){S.remove(tileG);tileG=new THREE.Group();S.add(tileG);
   occ={x0:W,x1:-1,y0:H,y1:-1};tiles.forEach((r,y)=>r.forEach((t,x)=>{if(t){occ.x0=Math.min(occ.x0,x);occ.x1=Math.max(occ.x1,x);occ.y0=Math.min(occ.y0,y);occ.y1=Math.max(occ.y1,y);}}));if(occ.x1<0)occ={x0:0,x1:W-1,y0:0,y1:H-1};
   for(let y=0;y<H;y++)for(let x=0;x<W;x++){const t=tiles[y][x];if(!t)continue;const look=TILE_LOOK[t.k];const g=new THREE.Group();g.position.set(wx(x),0,wz(y));tileG.add(g);
     const p=box('plate',P,.3,P,M(look.base));p.position.y=.15;g.add(p);
-    if(t.t!=='exit')[-1,1].forEach(s=>{const v=t.d%2,e=box('led'+v,v?.32:CS,.14,v?CS:.32,ledMat);e.position.set(v?s*CS*.47:0,.33,v?0:s*CS*.47);g.add(e);}); // 양옆 띠 조명(신호색)
     if(t.t==='belt')g.add(arrow(t.d,'#6f6c64',0,0,1.1));
     if(look.add)look.add(g,t,x,y,tiles);}
   fitCam();}

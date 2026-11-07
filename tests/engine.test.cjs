@@ -62,26 +62,30 @@ for (const k of Object.keys(E.MAPS)) {
   ok(frozen / reds > .1, `분기 칸 없음: 빨강 한 번에 걸린 상자 ${(frozen / reds).toFixed(2)}개`);
 }
 
-// 7. 코인(경계): 실려만 가서는 절대 못 먹고, 코인 자리에서 그 경계를 넘어가면 먹는다. 다른 자리에서 넘으면 못 먹는다
+// 7. 코인(틈, 닿으면 먹기): 실려만 가서는 몸이 안 닿아 못 먹고, 코인 근처에서 틈을 넘어가면 미끄러지는 동안 닿아서 먹는다.
+//    코인 한 칸 앞에서 넘으면 안 닿는다
 {
   const w = E.createWorld(E.MAPS.compact.str); fill(w);
   const p = w.add('player'); let coins = E.initCoins(w);
-  ok(coins.length === E.COIN_N && coins.every(c => w.T(...c.a).t === 'belt' && w.T(...c.b).t === 'belt'), `코인 ${coins.length}개, 모두 두 벨트 사이 경계`);
+  ok(coins.length === E.COIN_N && coins.every(c => w.T(...c.a).t === 'belt' && w.T(...c.b).t === 'belt'), `코인 ${coins.length}개, 모두 두 벨트 사이 틈`);
   let got = 0; for (let i = 0; i < 90 * 30; i++) { w.step(1 / 30); got += E.coinStep(w, coins, 1 / 30, b => b === p).length; w.events = []; }
   ok(got === 0 && !(p.got > 0), `가만히 실려 가는 상자는 90초 동안 코인 0개 (${got})`);
-  // 코인 자리에서 넘어가기: 코인 경계 레일 위에 올려 두고 코인 열 바로 앞에서 기다렸다 넘는다
-  const w2 = E.createWorld(E.MAPS.compact.str); const q = w2.add('player'); const c = E.coinSeams(w2).find(s => !s.sw && s.a[0] >= 3 && w2.T(...s.a).d === 0 && w2.T(s.a[0] - 1, s.a[1]).t === 'belt' && w2.T(s.a[0] - 1, s.b[1]).t === 'belt');
-  const coin = { id: 1, a: c.a, b: c.b, h: c.h, x: c.x, y: c.y, t: 99 }; const cs = [coin];
-  q.cx = c.a[0] - 1; q.cy = c.a[1]; q.d = 0; q.s = .3; q.slide = null; // 화면 위치 = 코인 열 0.7칸 앞
-  let early = 0; { const h = E.coinDir(w2, q, coin); ok(h.on && !h.ready, '코인 경계 레일 위, 코인 자리 전: 아직 아님'); }
-  const hopped = !!w2.hop(q, 1); early = E.coinStep(w2, cs, 0, b => b === q).length; w2.events = [];
-  ok(hopped && early === 0, `코인 자리 0.7칸 앞에서 넘으면 못 먹음 (넘어감 ${hopped})`);
-  const w3 = E.createWorld(E.MAPS.compact.str); const r = w3.add('player'); r.cx = c.a[0]; r.cy = c.a[1]; r.d = 0; r.s = .2; r.slide = null;
-  const d3 = E.coinDir(w3, r, coin); ok(d3.ready && d3.h === 1, `코인 자리: 지금 아래로 넘으면 먹음 (h ${d3.h})`);
-  w3.hop(r, d3.h); const g3 = E.coinStep(w3, cs, 0, b => b === r); w3.events = [];
-  ok(g3.length === 1 && r.got === 1, '코인 자리에서 경계를 넘으면 먹음');
-  r.slide = null; r.s = .2; w3.hop(r, 3); const again = E.coinStep(w3, cs, 0, b => b === r).length; w3.events = [];
-  ok(again === 0 && r.got === 1, '같은 코인은 한 번만');
+  // 코인 틈의 위 레일에 상자를 두고, 코인 열에서 몇 칸 앞(start)에서 아래로 넘어간 뒤 한 칸 갈 동안 닿는지 본다
+  const W0 = E.createWorld(E.MAPS.compact.str);
+  const c = E.coinSeams(W0).find(s => !s.sw && s.a[0] >= 3 && W0.T(...s.a).d === 0 && W0.T(s.a[0] - 1, s.a[1]).t === 'belt' && W0.T(s.a[0] - 1, s.b[1]).t === 'belt');
+  const coin = { id: 1, a: c.a, b: c.b, h: c.h, x: c.x, y: c.y, t: 99 };
+  const tryHop = start => { const w2 = E.createWorld(E.MAPS.compact.str); const q = w2.add('player'); const cs = [coin];
+    const cx = Math.floor(c.a[0] - start); q.cx = cx; q.cy = c.a[1]; q.d = 0; q.s = (c.a[0] - start) - cx; q.slide = null;
+    const before = E.coinDir(w2, q, coin); const hopped = !!w2.hop(q, 1); let n = 0;
+    for (let i = 0; i < 30; i++) { n += E.coinStep(w2, cs, 0, b => b === q).length; w2.step(1 / 30); w2.events = []; }
+    return { hopped, n, ready: before.ready, on: before.on }; };
+  const atCoin = tryHop(.1), early = tryHop(1);
+  ok(atCoin.hopped && atCoin.n === 1 && atCoin.ready, `코인 0.1칸 앞에서 넘으면 닿아서 먹음 (먹음 ${atCoin.n}, ready ${atCoin.ready})`);
+  ok(early.hopped && early.n === 0 && early.on && !early.ready, `코인 한 칸 앞에서 넘으면 안 닿음 (먹음 ${early.n})`);
+  const w3 = E.createWorld(E.MAPS.compact.str); const r = w3.add('player'); r.cx = c.a[0]; r.cy = c.a[1]; r.d = 0; r.s = 0; r.slide = null; const cs3 = [coin];
+  w3.hop(r, 1); for (let i = 0; i < 12; i++) { E.coinStep(w3, cs3, 0, b => b === r); w3.step(1 / 30); w3.events = []; }
+  w3.hop(r, 3); for (let i = 0; i < 12; i++) { E.coinStep(w3, cs3, 0, b => b === r); w3.step(1 / 30); w3.events = []; }
+  ok(r.got === 1, `같은 코인은 한 번만 (${r.got})`);
 }
 
 // 9. 분기 맵: 일반 상자는 분기 칸이나 그 바로 앞뒤에서만 넘어가고, 덜컹 이벤트에 분기 칸 여부가 붙는다

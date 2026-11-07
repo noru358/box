@@ -2,8 +2,8 @@
 const boxGeo=new THREE.BoxGeometry(1,1,1),labelGeo=new THREE.BoxGeometry(.72,.05,.54),shadowGeo=new THREE.CircleGeometry(.75,16);
 const redMat=M('#d6322a'),cardMats=['#c08d5c','#b07f52','#cc9b6b'].map(M),shadowMat=new THREE.MeshBasicMaterial({color:'#000',transparent:true,opacity:.28,depthWrite:false});
 let meshes=new Map();const plainLabel=new THREE.MeshBasicMaterial({color:'#f3efe4'});
-// 상자 무늬: 0 없음, 1 빨간 테이프, 2 파란 테이프, 3 검은 십자 테이프, 4 노란 동그라미 스티커. 같은 무늬가 판에 여러 개라 따라갈 수는 있어도 확신은 못 한다
-const PATS=5,tapeGeo=new THREE.BoxGeometry(1.02,.06,.22),dotGeo=new THREE.CylinderGeometry(.2,.2,.06,16),patMats=[null,B('#d6322a'),B('#2f6fd6'),B('#1e1c18'),B('#f2c230')];
+// 상자 무늬: 0 없음, 1 빨간 테이프, 2 파란 테이프, 3 검은 십자 테이프, 4 보라 동그라미 스티커. 같은 무늬가 판에 여러 개라 따라갈 수는 있어도 확신은 못 한다
+const PATS=5,tapeGeo=new THREE.BoxGeometry(1.02,.06,.22),dotGeo=new THREE.CylinderGeometry(.2,.2,.06,16),patMats=[null,B('#d6322a'),B('#2f6fd6'),B('#1e1c18'),B('#8a4bc9')]; // 스티커는 보라(노랑이면 코인과 헷갈림)
 const newPat=()=>(Math.random()*PATS)|0;
 function decorate(m,b){if(m.deco){m.g.remove(m.deco);m.deco=null;}m.pat=b.pat;if(!b.pat)return;const d=new THREE.Group(),top=.33+b.size*.8+.06;
   if(b.pat===4){const c=new THREE.Mesh(dotGeo,patMats[4]);c.position.set(b.size*.22,top,b.size*.22);c.scale.setScalar(b.size);d.add(c);}
@@ -13,13 +13,13 @@ function meshFor(b){if(b.pat==null)b.pat=newPat();let m=meshes.get(b);if(m){if(m
   const body=new THREE.Mesh(boxGeo,cardMats[b.id%3]);body.scale.set(b.size,b.size*.8,b.size);body.position.y=.33+b.size*.4;g.add(body);
   const lab=new THREE.Mesh(labelGeo,plainLabel);lab.position.y=.33+b.size*.8+.03;lab.scale.setScalar(b.size);g.add(lab);S.add(g);body.userData.box=b;lab.userData.box=b;m={g,body,lab,bump:0};meshes.set(b,m);decorate(m,b);return m;}
 function clearMeshes(){meshes.forEach(m=>S.remove(m.g));meshes=new Map();}
-// 코인 그리기(규칙은 engine.js "코인"): 두 레일 사이 경계 위, 넘어가는 방향으로 놓인 금색 띠 + 위에 떠서 도는 동전.
-// 띠는 수명이 줄면 짧아지고, 3초 남으면 동전이 깜빡. 내가 먹은 코인은 내 화면에서만 지운다(loop.js)
+// 코인 그리기(규칙은 engine.js "코인"): 두 레일 사이 틈 위, 상자 높이에 떠서 도는 동전(보이는 자리 = 닿는 자리).
+// 수명이 줄면 작아지고, 3초 남으면 깜빡. 내가 먹은 코인은 내 화면에서만 지운다(loop.js)
 let coins=[],coinMeshes=new Map();
-const goldMat=B('#f2a900'),coinMat=M('#ffcc33'),coinGeo=new THREE.CylinderGeometry(.75,.75,.18,24),coinQ=new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1,0,0),Math.PI/2);
+const coinMat=B('#ffcc33'),coinRim=B('#1e1c18'),coinGeo=new THREE.CylinderGeometry(1,1,.18,28),coinRimGeo=new THREE.CylinderGeometry(1.2,1.2,.1,28),coinQ=new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1,0,0),Math.PI/2);
+// 코인 = 금색 동전 + 검은 테두리, 늘 정면(loop.js)
 function coinMesh(c){let g=coinMeshes.get(c.id);if(g)return g;g=new THREE.Group();
-  const bar=box('coinbar'+c.h,c.h===0?CS*.9:.55,.08,c.h===0?.55:CS*.9,goldMat);bar.position.y=.42;g.add(bar);
-  const k=new THREE.Mesh(coinGeo,coinMat);k.position.y=2.6;g.add(k);g.userData={coin:k,bar};g.position.set(wx(c.x),0,wz(c.y));S.add(g);coinMeshes.set(c.id,g);return g;}
+  const k=new THREE.Group(),face=new THREE.Mesh(coinGeo,coinMat),rim=new THREE.Mesh(coinRimGeo,coinRim);rim.position.y=-.06;k.add(face,rim);k.position.y=1.1;g.add(k);g.userData={coin:k};g.position.set(wx(c.x),0,wz(c.y));S.add(g);coinMeshes.set(c.id,g);return g;}
 function syncCoins(){const ids=new Set(coins.map(c=>c.id));coinMeshes.forEach((g,id)=>{if(!ids.has(id)){S.remove(g);coinMeshes.delete(id);}});coins.forEach(coinMesh);}
 function clearCoins(){coins=[];syncCoins();}
 function aimCoin(b){b.took=b.took||new Set();b.coin=pickCoin(world,b,coins);}

@@ -15,7 +15,12 @@ const _mats={};
 const M=c=>_mats['L'+c]||(_mats['L'+c]=new THREE.MeshLambertMaterial({color:c}));
 const B=c=>_mats['B'+c]||(_mats['B'+c]=new THREE.MeshBasicMaterial({color:c,side:THREE.DoubleSide}));
 const CS=3.4,DV=[[1,0],[0,1],[-1,0],[0,-1]];
-const floor=new THREE.Mesh(new THREE.PlaneGeometry(200,120),M('#cfc8b8'));floor.rotation.x=-Math.PI/2;S.add(floor);
+const floorMat=new THREE.MeshLambertMaterial({color:'#cfc8b8'}); // 신호용이라 색 캐시(M)와 따로
+const floor=new THREE.Mesh(new THREE.PlaneGeometry(400,240),floorMat);floor.rotation.x=-Math.PI/2;S.add(floor);
+// 신호 = 바닥 조명 하나. 직원이 보고 있나는 판 전체에 하나뿐인 상태라 맵 모양과 상관없이 바닥 전체 색으로만 보인다.
+// 초록 = 푸른 기, 노랑 = 깜빡임, 빨강 = 붉게. 판 밖(메뉴)에선 기본색
+const FLOOR={idle:['#cfc8b8','#d6d0c2'],green:['#6fae6a','#86bd80'],yellow:['#d9ae22','#e2bf4a'],red:['#d4604f','#dc786a']}; // 조명(밝기 1.5)에 씻겨 옅어지므로 진하게
+function floorLight(L,now){const k=L==='yellow'&&Math.floor(now/120)%2?'idle':(FLOOR[L]?L:'idle');floorMat.color.set(FLOOR[k][0]);S.background.set(FLOOR[k][1]);}
 
 // ---------- 맵 목록 ----------
 const mapList=()=>['compact','switch','loop'].map(k=>({k,name:MAPS[k].name,str:MAPS[k].str}));

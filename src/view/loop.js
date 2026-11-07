@@ -24,23 +24,23 @@ function frame(now){const raw=(now-last)/1000,dt=Math.min(.05,raw);last=now;if(r
       for(const [b] of got){coinScored(b);if(over)break;}
       if(!over)(mode==='hide'?[player]:bots).forEach(b=>{if(b&&!b.gone)aimCoin(b);});}
     world.step(dt);
+    if(cl&&live&&!over)for(const c of coinTouched(world,player,coins))if(!player.took.has(c.id)){player.took.add(c.id);netCoin(c.id);say(`코인 ${player.got+1}/${goal}`);} // 친구와 하기: 코인도 숨는 쪽 화면이 판정해 알린다
     world.events.forEach(ev=>{
       if(cl&&live&&ev.b===player&&(ev.type==='frozen'||(ev.type==='thud'&&ev.off)))netAlert(); // 친구와 하기: 걸림은 숨는 쪽 화면이 정해서 알린다
-      if(cl&&live&&!over&&ev.type==='thud'&&ev.b===player){const c=coinCrossed(coins,ev);if(c&&!player.took.has(c.id)){player.took.add(c.id);netCoin(c.id);say(`코인 ${player.got+1}/${goal}`);}} // 친구와 하기: 코인도 숨는 쪽 화면이 판정해 알린다
       if(ev.type==='thud'){const m=meshes.get(ev.b);if(m)m.bump=.3;if(ev.off&&!ev.b.remote)alertOn(ev.b);if(live&&mode==='hide'&&ev.off)sus(ev.b,3.6);if(live&&mode==='hide'&&world.hasSwitches&&!ev.off&&!ev.sw&&!ev.tun)sus(ev.b,1.6);}
       if(ev.type==='deliver'&&ev.b.kind==='npc'){ev.b.pat=newPat();clearedOff(ev.b);} // 출고된 일반 상자는 새 상자로(무늬·확인 표시 새로)
       if(ev.type==='frozen'){if(!ev.b.remote)alertOn(ev.b);if(live&&mode==='hide'){sus(ev.b,3.2);if(ev.b===player)say('넘어가다 걸렸다!',1.2);}}
       if(ev.type==='light'){if(live)lightSound(ev.s);if(ev.s==='green')alertsOff();if(live&&mode==='hide')recLight(ev.s);if(live&&mode==='seek'&&ev.s==='green'){const ctx=aiCtx();bots.forEach(b=>{if(!b.found&&!b.gone&&!b.remote)botPlan(world,b,ctx);});}}});
-    {const on=live&&world.light==='red';stage.classList.toggle('red',on);$('redTag').hidden=!on;if(on)$('redTag').textContent=mode==='seek'?`보는 중 ${Math.max(0,2.5-world.lightT).toFixed(1)}초 · 지금 옆으로 가는 상자는 !`:'직원이 보는 중';}
-    {const L=world.light;ledMat.color.set(L==='red'?'#ff2a1f':L==='yellow'?(Math.floor(now/90)%2?'#ffd000':'#6b5a00'):'#2fd16a');} // 띠 조명 = 신호
+    {const on=live&&world.light==='red';$('redTag').hidden=!on;if(on)$('redTag').textContent=mode==='seek'?`보는 중 ${Math.max(0,2.5-world.lightT).toFixed(1)}초 · 지금 옆으로 가는 상자는 !`:'직원이 보는 중';}
+    floorLight(world.light,now); // 신호 = 바닥 조명
     world.events=[];
 
     world.boxes.forEach(b=>{const m=meshFor(b);if(b.gone||b.pending||inTun(b)){m.g.visible=false;return;}m.g.visible=true;
       let [x,y]=world.pos(b);if(b.vo){x+=b.vo[0];y+=b.vo[1];const k=Math.exp(-dt/.12);b.vo[0]*=k;b.vo[1]*=k;if(Math.abs(b.vo[0])+Math.abs(b.vo[1])<.01)b.vo=null;}let h=0;if(m.bump>0){m.bump-=dt;h=Math.abs(Math.sin(m.bump*30))*.15;}m.g.position.set(wx(x),h,wz(y));});
     coins.forEach((c,i)=>{const g=coinMeshes.get(c.id);if(!g)return;const k=g.userData.coin,f=Math.max(0,c.t/COIN_LIFE);
       g.visible=!(mode==='hide'&&player&&player.took&&player.took.has(c.id)); // 내가 먹은 코인은 내 화면에서만 지운다(남들 화면엔 그대로라 들통나지 않음)
-      if(c.h===0)g.userData.bar.scale.x=.35+.65*f;else g.userData.bar.scale.z=.35+.65*f;k.visible=!(c.t<3&&Math.floor(now/120)%2);
-      k.quaternion.copy(cam.quaternion).multiply(coinQ);k.scale.x=.25+.75*Math.abs(Math.cos(now/260+i));k.position.y=2.6+.25*Math.sin(now/300+i);}); // 동전 면이 늘 카메라를 본다
+      k.scale.y=k.scale.z=.6+.4*f;k.visible=!(c.t<3&&Math.floor(now/120)%2);
+      k.quaternion.copy(cam.quaternion).multiply(coinQ);k.scale.x=.6+.4*f;k.position.y=1.1+.12*Math.sin(now/300+i);}); // 크기가 수명. 납작하게 도는 건 뺌(작아 보이고 스티커와 헷갈림) // 동전 면이 늘 카메라를 본다
     const hv=!!(hover&&mode==='seek'&&!over&&!hover.gone&&!hover.found);hoverRing.visible=hv;if(hv){const [hx,hy]=world.pos(hover);hoverRing.position.set(wx(hx),.42,wz(hy));}
     if(mode==='hide'&&player&&!player.pending){const [x,y]=world.pos(player);const X=wx(x),Z=wz(y),h=player.size*.8+.33;
       meArrow.position.set(X,h+1.4+.35*Math.sin(now/220),Z);meArrow.quaternion.copy(cam.quaternion);meArrow.scale.setScalar(1.35);

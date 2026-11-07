@@ -77,7 +77,7 @@ function createWorld(str,opt){opt=opt||{};const rng=opt.rng||Math.random;const {
     if(s==='red')for(const b of w.boxes){if(b.gone||b.pending)continue;if(b.slide&&b.slide.hid)continue;if(w.midMove(b))w.events.push({type:'frozen',b,x:w.pos(b)[0],y:w.pos(b)[1]});}
     w.events.push({type:'light',s});};
   // 사람 상자의 옆 칸 갈아타기
-  w.thud=function(b,move,sw,tun,h,from){const [x,y]=w.pos(b);const off=w.light==='red'&&!tun;if(move)b.lastWin=w.win;w.events.push({type:'thud',b,x,y,off,sw:!!sw,tun:!!tun,h,from});return off;}; // sw: 분기 칸에서 넘어갔나, h·from: 넘어간 방향과 넘기 전 화면 위치의 칸(코인 판정)
+  w.thud=function(b,move,sw,tun){const [x,y]=w.pos(b);const off=w.light==='red'&&!tun;if(move)b.lastWin=w.win;w.events.push({type:'thud',b,x,y,off,sw:!!sw,tun:!!tun});return off;}; // sw: 분기 칸에서 넘어갔나
   w.hop=function(b,h){if(b.pending||b.gone||b.slide&&b.slide.t<1)return null;if(h%2===b.d%2)return null;
     const here=tiles[b.cy][b.cx];if(!hopable(here))return null;
     const [px,py]=w.pos(b);const nx=b.cx+DX[h],ny=b.cy+DY[h];const nt=T(nx,ny);if(!hopable(nt))return null;
@@ -86,7 +86,7 @@ function createWorld(str,opt){opt=opt||{};const rng=opt.rng||Math.random;const {
     // 분기 칸 위였나·터널 안이었나는 화면에 보이는 위치로 본다(칸 번호는 최대 한 칸 뒤라, 터널 입구·출구 근처에서 안에 있는데도 밖으로 잡혔다)
     const fromSw=w.isSwitch(Math.round(px),Math.round(py)),fromTun=w.isTunnel(Math.round(px),Math.round(py))&&w.isTunnel(Math.round(px+DX[h]),Math.round(py+DY[h]));
     b.cx=cx;b.cy=cy;b.s=s;b.d=d;const nb=[cx+DX[d]*s,cy+DY[d]*s];const hid=fromTun;b.slide={ox:px-nb[0],oy:py-nb[1],t:0,hid};
-    return {off:w.thud(b,true,fromSw,hid,h,[Math.round(px),Math.round(py)])};}; // hid: 터널 안에서 터널 안으로(안 보임)
+    return {off:w.thud(b,true,fromSw,hid)};}; // hid: 터널 안에서 터널 안으로(안 보임)
   w.step=function(dt){w.t+=dt;w.lightT+=dt;
     // NPC: 초록일 때 흩어져서 한 줄, 노랑일 땐 아주 가끔 늦게(=걸릴 수 있음)
     const rate=(w.light==='green'?WANDER:w.light==='yellow'?w.diff.late:0);
@@ -122,10 +122,12 @@ function signalAI(diff,rng){rng=rng||Math.random;const r=(a)=>a[0]+rng()*(a[1]-a
     else if(w.light==='yellow'){if(w.lightT>=diff.yellow){w.setLight('red');next=r(diff.red);}}
     else if(w.lightT>=next){w.setLight('green');next=rng()<diff.fake?.4+rng()*.5:r(diff.green);}};}
 // ===== 코인 =====
-// 코인은 이웃한 두 레일 사이 경계 위에 뜬다. 그 경계를 코인 자리에서 옆으로 넘어갈 때만 먹힌다.
-// 그래서 코인 = 넘어가기 한 번(들킬 위험을 지는 행동)이고, 실려만 가서는 절대 못 먹는다. 덧댄 예외 규칙이 필요 없다.
-// 코인 {id, a:[x,y], b:[x,y] (a에서 h 방향 옆 칸), h: 0 가로로 이웃 | 1 세로로 이웃, x,y: 경계 가운데, sw: 분기 칸 옆인가, t: 남은 수명}
+// 코인은 이웃한 두 레일 사이 틈 위, 상자 높이에 떠 있다. 상자 몸이 닿으면 먹는다(닿으면 먹는다 = 직관 그대로).
+// 레일을 따라 실려 가는 상자는 틈에서 반 칸 떨어져 있어 몸이 안 닿고, 옆으로 넘어가면 틈을 지나며 닿는다.
+// 그래서 "실려만 가서는 못 먹는다"가 예외 규칙 없이 위치만으로 성립한다.
+// 코인 {id, a:[x,y], b:[x,y] (a에서 h 방향 옆 칸), h: 0 가로로 이웃 | 1 세로로 이웃, x,y: 틈 가운데, sw: 분기 칸 옆인가, t: 남은 수명}
 const COIN_N=4,COIN_LIFE=14,COIN_GOAL=4;
+const COIN_TOUCH=.45; // 상자 중심과 코인 중심이 가로·세로 둘 다 이 칸 수 안이면 닿음. 레일 위 상자는 틈에서 0.5칸이라 실려 가선 안 닿는다
 // 코인이 뜰 수 있는 경계: 두 칸 다 일반 벨트(분기 칸 포함, 터널·입고·출고 제외)이고 둘 다 경계와 나란히 흐를 때(그래야 넘어갈 수 있다)
 function coinSeams(w){if(w._seams)return w._seams;const out=[],ok=(t,h)=>t&&t.t==='belt'&&!t.tun&&t.d%2!==h%2;
   for(let y=0;y<w.H;y++)for(let x=0;x<w.W;x++)for(const h of [0,1]){const a=w.T(x,y),b=w.T(x+DX[h],y+DY[h]);
@@ -136,14 +138,12 @@ function newCoin(w,coins,rng){rng=rng||Math.random;const all=coinSeams(w),far=s=
   line=s=>s.h===1?'h'+s.y:'v'+s.x;let c=all.filter(s=>far(s)&&coins.every(o=>line(o)!==line(s)));if(!c.length)c=all.filter(far);if(!c.length)return null;
   const s=c[(rng()*c.length)|0];w.coinId=(w.coinId||0)+1;return {id:w.coinId,a:s.a,b:s.b,h:s.h,x:s.x,y:s.y,sw:s.sw,t:COIN_LIFE*(.7+rng()*.3)};}
 function initCoins(w,rng){const coins=[];for(let i=0;i<COIN_N;i++){const c=newCoin(w,coins,rng);if(c)coins.push(c);}return coins;}
-// 넘어가기(thud 이벤트)가 지난 코인 경계: 넘기 전 칸과 넘은 쪽 칸이 코인의 두 칸이면 그 코인
-function coinCrossed(coins,ev){if(!ev||ev.h==null||!ev.from)return null;const [fx,fy]=ev.from,tx=fx+DX[ev.h],ty=fy+DY[ev.h],is=(p,x,y)=>p[0]===x&&p[1]===y;
-  return coins.find(c=>(is(c.a,fx,fy)&&is(c.b,tx,ty))||(is(c.b,fx,fy)&&is(c.a,tx,ty)))||null;}
-// 한 걸음: 수명이 다 된 코인은 다른 경계로 옮긴다(존버 방지). who(상자)가 참인 상자의 넘어가기 중 코인 경계를 지난 것을 먹은 걸로 센다.
+// 이 상자 몸에 닿아 있는 코인들(화면 위치 기준, 넘어가는 중이면 미끄러지는 위치로)
+function coinTouched(w,b,coins){if(!b||b.gone||b.pending)return [];const [x,y]=w.pos(b);return coins.filter(c=>Math.abs(x-c.x)<COIN_TOUCH&&Math.abs(y-c.y)<COIN_TOUCH);}
+// 한 걸음: 수명이 다 된 코인은 다른 틈으로 옮긴다(존버 방지). who(상자)가 참인 상자 몸에 닿은 코인을 먹은 걸로 센다.
 // 같은 코인은 상자마다 한 번(코인은 먹어도 그대로 있다. 사라지면 누가 먹었는지 들통나서). 먹은 [상자, 코인] 목록을 돌려준다
 function coinStep(w,coins,dt,who,rng){coins.forEach((c,i)=>{c.t-=dt;if(c.t<=0){const n=newCoin(w,coins.filter(o=>o!==c),rng);if(n)coins[i]=n;else c.t=COIN_LIFE;}});
-  const got=[];for(const ev of w.events){if(ev.type!=='thud'||!who(ev.b))continue;const c=coinCrossed(coins,ev);const b=ev.b;b.took=b.took||new Set();
-    if(c&&!b.took.has(c.id)){b.took.add(c.id);b.got=(b.got|0)+1;got.push([b,c]);}}
+  const got=[];for(const b of w.boxes){if(!who(b))continue;b.took=b.took||new Set();for(const c of coinTouched(w,b,coins))if(!b.took.has(c.id)){b.took.add(c.id);b.got=(b.got|0)+1;got.push([b,c]);}}
   return got;}
 // 상자에서 코인 경계까지: lat = 경계 쪽으로 몇 레일(0 = 경계의 두 레일 중 하나에 있음), fwd = 실려 가서 코인 자리까지 몇 칸
 function coinGap(w,b,c){const t0=w.T(b.cx,b.cy);if(!t0||t0.d%2===c.h%2)return null;const [px,py]=w.pos(b);
@@ -153,9 +153,9 @@ function coinGap(w,b,c){const t0=w.T(b.cx,b.cy);if(!t0||t0.d%2===c.h%2)return nu
 // 분기 칸 옆이 아닌 코인은 건너면 티가 나므로 1.5초어치 덜 끌린다(일반 상자도 넘어가는 분기 칸 옆 코인을 먼저)
 function pickCoin(w,b,coins){let best=null,bc=1e9;for(const c of coins){if(b.took&&b.took.has(c.id))continue;const g=coinGap(w,b,c);if(!g)continue;
   const cost=g.fwd/BASE+g.dl*.9+(g.fwd/BASE>c.t?6:0)+(c.sw?0:1.5);if(cost<bc){bc=cost;best=c;}}return best;}
-// 코인을 먹으려면 어느 쪽으로 넘어가나. 경계의 두 레일 중 하나에 있으면 건너편으로(ready = 지금 코인 자리라 넘으면 먹음), 아니면 경계 쪽 레일로
+// 코인을 먹으려면 어느 쪽으로 넘어가나. 틈의 두 레일 중 하나에 있으면 건너편으로(ready = 지금 넘으면 미끄러지는 동안 몸이 코인에 닿음), 아니면 틈 쪽 레일로
 function coinDir(w,b,c){const g=c&&coinGap(w,b,c);if(!g)return {h:-1,ready:false,on:false};const on=g.lat===g.la||g.lat===g.la+1;
   let h=on?(g.lat===g.la?c.h:c.h+2):(g.lat<g.la?c.h:c.h+2);h%=4;if(h%2===b.d%2)return {h:-1,ready:false,on};
   const nt=w.T(b.cx+DX[h],b.cy+DY[h]);if(!nt||nt.t==='exit')return {h:-1,ready:false,on};
-  return {h,on,ready:on&&Math.abs(g.fwd)<.5};}
-if(typeof module!=='undefined')module.exports={TUN_P,SW_P,SW_BAIT,WANDER,BASE,COIN_N,COIN_LIFE,COIN_GOAL,coinSeams,newCoin,initCoins,coinCrossed,coinStep,coinGap,pickCoin,coinDir,signalAI,createWorld,MAPS,TILES,parseMap,mapToStr,parseTile,tileToken,laneMap,DIFF,DIRS,DX,DY};
+  return {h,on,ready:on&&g.fwd>-.2&&g.fwd<.65};} // 넘어가는 0.38초 동안 0.47칸 앞으로 가므로 코인 조금 앞에서부터
+if(typeof module!=='undefined')module.exports={TUN_P,SW_P,SW_BAIT,WANDER,BASE,COIN_N,COIN_LIFE,COIN_GOAL,COIN_TOUCH,coinSeams,newCoin,initCoins,coinTouched,coinStep,coinGap,pickCoin,coinDir,signalAI,createWorld,MAPS,TILES,parseMap,mapToStr,parseTile,tileToken,laneMap,DIFF,DIRS,DX,DY};
