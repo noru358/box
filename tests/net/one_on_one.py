@@ -64,7 +64,7 @@ async def main():
           requestAnimationFrame(f);};f();})''')
       await asyncio.sleep(1)
       got1=await S.evaluate('__box.bots[0].got|0');hg=await H.evaluate('__box.player.took.size')
-      chk(res.startswith('건넘') and got1==got0+1,f'{tag} 코인 닿기: 숨는 쪽 판정 → 술래 화면 코인 {got0}→{got1} ({res}, 숨는 쪽 먹은 수 {hg})')
+      chk(res.startswith('건넘') and got1>got0 and got1==hg,f'{tag} 코인 닿기: 숨는 쪽 판정 → 술래 화면 코인 {got0}→{got1} ({res}, 숨는 쪽 먹은 수 {hg})')
       # 술래가 스캔으로 찾음 → 둘 다 끝
       await S.evaluate(f'__box.scan({rid})');await asyncio.sleep(1.5)
       chk(await S.evaluate('__box.over'),tag+' 술래 쪽도 끝: '+(await S.text_content('#panelBox'))[:20])

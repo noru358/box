@@ -16,8 +16,8 @@ function synthWin(pers,need,panic){const hops=[];
 // 분기 갈래 기본 패턴: 성격별로 분기 칸까지 기다릴 확률(나머지는 아무 데서나 지름)
 const SW_WAIT={rush:.5,careful:1,mimic:.9};
 function swWin(pers,w){return {need:w.need,hops:w.hops.map(h=>Object.assign({},h,{sw:h.sw!=null?h.sw:(chance(SW_WAIT[pers])?1:0)}))};}
-// 이 상자가 노리는 코인 경계의 레일까지 남은 줄 수(0 = 경계 레일 위라 건너기만 하면 됨, 1, 2 = 2 이상)
-function needOf(w,b){const g=b&&b.coin&&coinGap(w,b,b.coin);return g?Math.min(2,g.dl):0;}
+// 이 상자가 코인을 먹기까지 넘어가야 하는 횟수(0 = 노릴 코인 없음, 1 = 바로 옆 레일, 2 = 두 줄 이상 또는 같은 레일 코인 뒤라 비켰다 와야 함)
+function needOf(w,b){const g=b&&b.coin&&coinGap(w,b,b.coin);return g?(g.L===0?2:Math.min(2,Math.abs(g.L))):0;}
 // 화면에 보이는 위치가 터널 덮개 아래인가(찾는 쪽에게 안 보임)
 function inTunnel(w,b){const [x,y]=w.pos(b);return w.isTunnel(Math.round(x),Math.round(y));}
 function pickWin(w,b,ctx){const need=needOf(w,b),pool=ctx.humanWins;
@@ -32,11 +32,11 @@ function botHop(w,b,dir){const sd=coinDir(w,b,b.coin).h;let h=-1;
 function botThink(w,b,dt,ctx){if(b.found||b.gone||b.pending)return;if(!b.plan)botPlan(w,b,ctx);if(w.midMove(b))return;
   if(inTunnel(w,b)){const h=coinDir(w,b,b.coin).h,[bx,by]=w.pos(b);if(h>=0&&w.isTunnel(Math.round(bx+DX[h]),Math.round(by+DY[h]))&&Math.random()<dt*3){w.hop(b,h);return;}} // 터널 안이면 안 보이니 코인 쪽으로 갈아탐
   const hp=b.plan[b.pi];if(!hp)return;const L=w.light,lt=w.lightT;
-  // 코인 쪽으로 가는 움직임인데 이미 코인 경계 레일 위면, 코인 자리에 올 때까지 기다렸다 건넌다(아무 데서나 건너면 못 먹음).
+  // 코인 쪽으로 가는 움직임인데 이미 코인 레일 바로 옆이면, 코인과 나란해질 때까지 기다렸다 넘는다(아무 때나 넘으면 코인 앞이나 뒤에 떨어짐).
   // 분기 칸에서 넘어간 움직임이면 분기 칸에 올 때까지 기다린다. 코인 수명이 3초 안 남았거나 지금이 코인 자리면 안 기다린다
   const cd=coinDir(w,b,b.coin),waitCoin=hp.dir===1&&cd.on&&!cd.ready;
   const waitSw=!cd.ready&&hp.sw===1&&hp.ph==='g'&&!(()=>{const [x,y]=w.pos(b);return w.isSwitch(Math.round(x),Math.round(y));})()&&!(b.coin&&b.coin.t<3);
-  if(hp.ph==='g'){if(L==='green'){if(lt>=hp.t&&!waitCoin&&!waitSw)botHop(w,b,hp.dir);}
+  if(hp.ph==='g'){if(L==='green'){if((lt>=hp.t||(hp.dir===1&&cd.ready))&&!waitCoin&&!waitSw)botHop(w,b,hp.dir);} // 코인과 나란한 순간은 계획 시각보다 먼저 와도 잡는다
     else if(L==='yellow'&&lt<b.react&&!waitCoin)botHop(w,b,hp.dir); // 노랑을 아직 못 봤다
     else b.pi++;}
   else if(hp.ph==='y'){if(L==='yellow'&&lt>=hp.t)botHop(w,b,hp.dir);else if(L==='red')b.pi++;}

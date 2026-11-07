@@ -13,16 +13,16 @@ function meshFor(b){if(b.pat==null)b.pat=newPat();let m=meshes.get(b);if(m){if(m
   const body=new THREE.Mesh(boxGeo,cardMats[b.id%3]);body.scale.set(b.size,b.size*.8,b.size);body.position.y=.33+b.size*.4;g.add(body);
   const lab=new THREE.Mesh(labelGeo,plainLabel);lab.position.y=.33+b.size*.8+.03;lab.scale.setScalar(b.size);g.add(lab);S.add(g);body.userData.box=b;lab.userData.box=b;m={g,body,lab,bump:0};meshes.set(b,m);decorate(m,b);return m;}
 function clearMeshes(){meshes.forEach(m=>S.remove(m.g));meshes=new Map();}
-// 코인 그리기(규칙은 engine.js "코인"): 두 레일 사이 틈 위, 상자 높이에 떠서 도는 동전(보이는 자리 = 닿는 자리).
+// 코인 그리기(규칙은 engine.js "코인"): 레일 위를 느리게 굴러가며 상자 높이에 떠서 도는 동전(보이는 자리 = 닿는 자리).
 // 수명이 줄면 작아지고, 3초 남으면 깜빡. 내가 먹은 코인은 내 화면에서만 지운다(loop.js)
-let coins=[],coinMeshes=new Map();
+let coinMeshes=new Map(); // 코인 자체는 world.coins(엔진), 여기는 그림만
 const coinMat=M('#ffcc33'),coinGeo=new THREE.CylinderGeometry(.75,.75,.18,24),coinQ=new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1,0,0),Math.PI/2);
 // 코인 = 조명 받는 금색 동전(3D), 카메라를 보며 도는 것처럼 폭이 변함(loop.js)
 function coinMesh(c){let g=coinMeshes.get(c.id);if(g)return g;g=new THREE.Group();
-  const k=new THREE.Mesh(coinGeo,coinMat);k.position.y=1.1;g.add(k);g.userData={coin:k};g.position.set(wx(c.x),0,wz(c.y));S.add(g);coinMeshes.set(c.id,g);return g;}
-function syncCoins(){const ids=new Set(coins.map(c=>c.id));coinMeshes.forEach((g,id)=>{if(!ids.has(id)){S.remove(g);coinMeshes.delete(id);}});coins.forEach(coinMesh);}
-function clearCoins(){coins=[];syncCoins();}
-function aimCoin(b){b.took=b.took||new Set();b.coin=pickCoin(world,b,coins);}
+  const k=new THREE.Mesh(coinGeo,coinMat);k.position.y=1.1;g.add(k);g.userData={coin:k};S.add(g);coinMeshes.set(c.id,g);return g;}
+function syncCoins(){const cs=world?world.coins:[],ids=new Set(cs.map(c=>c.id));coinMeshes.forEach((g,id)=>{if(!ids.has(id)){S.remove(g);coinMeshes.delete(id);}});cs.forEach(coinMesh);}
+function clearCoins(){coinMeshes.forEach(g=>S.remove(g));coinMeshes=new Map();}
+function aimCoin(b){b.took=b.took||new Set();b.coin=pickCoin(world,b);}
 // 걸린 상자 표시
 const alertTex=(()=>{const c=document.createElement('canvas');c.width=64;c.height=96;const g=c.getContext('2d');g.fillStyle='#d6322a';g.beginPath();g.arc(32,40,30,0,Math.PI*2);g.fill();g.fillStyle='#fff';g.font='bold 52px sans-serif';g.textAlign='center';g.textBaseline='middle';g.fillText('!',32,42);return new THREE.CanvasTexture(c);})();
 const alertMat=new THREE.SpriteMaterial({map:alertTex,depthTest:false});

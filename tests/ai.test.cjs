@@ -35,10 +35,10 @@ const fill = (w, k = .28) => { const n = w.tiles.flat().filter(t => t && t.t !==
     const w = E.createWorld(E.MAPS.compact.str); fill(w);
     const sig = E.signalAI(E.DIFF.normal), ctx = { humanWins: [], time: 90, diff: E.DIFF.normal };
     const bots = w.boxes.slice(0, 3); ['rush', 'careful', 'mimic'].forEach((p, i) => { bots[i].kind = 'bot'; bots[i].pers = p; });
-    const coins = E.initCoins(w); const aim = b => { b.took = b.took || new Set(); b.coin = E.pickCoin(w, b, coins); };
+    E.initCoins(w); const aim = b => { b.took = b.took || new Set(); b.coin = E.pickCoin(w, b); };
     for (let i = 0; i < 90 * 30; i++) {
       sig(w, 1 / 30); bots.forEach(aim); ctx.time = 90 - i / 30;
-      bots.forEach(b => E.botThink(w, b, 1 / 30, ctx)); E.coinStep(w, coins, 1 / 30, b => bots.includes(b)); w.step(1 / 30);
+      bots.forEach(b => E.botThink(w, b, 1 / 30, ctx)); E.coinStep(w, b => bots.includes(b)); w.step(1 / 30);
       for (const e of w.events) {
         if (e.type === 'light' && e.s === 'green') bots.forEach(b => E.botPlan(w, b, ctx));
         if (e.type === 'thud' && bots.includes(e.b)) { hops++; if (w.light === 'green') green++; if (e.off) red++; if (e.sw) sw++; }
@@ -53,7 +53,7 @@ const fill = (w, k = .28) => { const n = w.tiles.flat().filter(t => t && t.t !==
   // 기준 0.2: v13.5부터 코인은 코인 자리에서 건너야 하고, 코인 절반쯤은 분기 칸 옆이 아니다(그 코인은 티 나는 대신 가까울 때만 노림)
   ok(sw / hops > .2, `숨은 AI: 분기 칸에서 넘어간 비율 ${(sw / hops).toFixed(2)} (0.2 넘게)`);
   ok(synth, '숨은 AI: 사람 기록이 없으면 기본 패턴');
-  ok(got >= 9, `숨은 AI: 틈을 넘어가며 코인에 닿아 먹는다 (세 판 아홉 상자 합 ${got}개, 한 상자 평균 1개 이상)`);
+  ok(got >= 9, `숨은 AI: 옆 레일에서 나란할 때 넘어가 코인에 닿아 먹는다 (세 판 아홉 상자 합 ${got}개, 한 상자 평균 1개 이상)`);
 }
 
 // 3. 사람 기록이 HUMAN_MIN개 넘으면 사람 창을 쓴다

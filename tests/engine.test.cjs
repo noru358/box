@@ -62,30 +62,35 @@ for (const k of Object.keys(E.MAPS)) {
   ok(frozen / reds > .1, `분기 칸 없음: 빨강 한 번에 걸린 상자 ${(frozen / reds).toFixed(2)}개`);
 }
 
-// 7. 코인(틈, 닿으면 먹기): 실려만 가서는 몸이 안 닿아 못 먹고, 코인 근처에서 틈을 넘어가면 미끄러지는 동안 닿아서 먹는다.
-//    코인 한 칸 앞에서 넘으면 안 닿는다
+// 7. 코인(느리게 굴러가는 물건, 닿으면 먹기)
+//    - 맵 셋에서 넘어가지 않고 실려만 가는 상자 셋은 90초 동안 코인 0개(같은 레일에선 코인 뒤에 줄 서서 안 닿음, 모퉁이 포함)
+//    - 코인은 벨트보다 느리다, 같은 레일 뒤 상자는 코인 뒤 0.62칸 밖에서 줄 선다
+//    - 옆 레일에서 나란할 때(coinDir ready) 넘어가면 닿아서 먹는다, 같은 코인은 한 번만
 {
-  const w = E.createWorld(E.MAPS.compact.str); fill(w);
-  const p = w.add('player'); let coins = E.initCoins(w);
-  ok(coins.length === E.COIN_N && coins.every(c => w.T(...c.a).t === 'belt' && w.T(...c.b).t === 'belt'), `코인 ${coins.length}개, 모두 두 벨트 사이 틈`);
-  let got = 0; for (let i = 0; i < 90 * 30; i++) { w.step(1 / 30); got += E.coinStep(w, coins, 1 / 30, b => b === p).length; w.events = []; }
-  ok(got === 0 && !(p.got > 0), `가만히 실려 가는 상자는 90초 동안 코인 0개 (${got})`);
-  // 코인 틈의 위 레일에 상자를 두고, 코인 열에서 몇 칸 앞(start)에서 아래로 넘어간 뒤 한 칸 갈 동안 닿는지 본다
-  const W0 = E.createWorld(E.MAPS.compact.str);
-  const c = E.coinSeams(W0).find(s => !s.sw && s.a[0] >= 3 && W0.T(...s.a).d === 0 && W0.T(s.a[0] - 1, s.a[1]).t === 'belt' && W0.T(s.a[0] - 1, s.b[1]).t === 'belt');
-  const coin = { id: 1, a: c.a, b: c.b, h: c.h, x: c.x, y: c.y, t: 99 };
-  const tryHop = start => { const w2 = E.createWorld(E.MAPS.compact.str); const q = w2.add('player'); const cs = [coin];
-    const cx = Math.floor(c.a[0] - start); q.cx = cx; q.cy = c.a[1]; q.d = 0; q.s = (c.a[0] - start) - cx; q.slide = null;
-    const before = E.coinDir(w2, q, coin); const hopped = !!w2.hop(q, 1); let n = 0;
-    for (let i = 0; i < 30; i++) { n += E.coinStep(w2, cs, 0, b => b === q).length; w2.step(1 / 30); w2.events = []; }
-    return { hopped, n, ready: before.ready, on: before.on }; };
-  const atCoin = tryHop(.1), early = tryHop(1);
-  ok(atCoin.hopped && atCoin.n === 1 && atCoin.ready, `코인 0.1칸 앞에서 넘으면 닿아서 먹음 (먹음 ${atCoin.n}, ready ${atCoin.ready})`);
-  ok(early.hopped && early.n === 0 && early.on && !early.ready, `코인 한 칸 앞에서 넘으면 안 닿음 (먹음 ${early.n})`);
-  const w3 = E.createWorld(E.MAPS.compact.str); const r = w3.add('player'); r.cx = c.a[0]; r.cy = c.a[1]; r.d = 0; r.s = 0; r.slide = null; const cs3 = [coin];
-  w3.hop(r, 1); for (let i = 0; i < 12; i++) { E.coinStep(w3, cs3, 0, b => b === r); w3.step(1 / 30); w3.events = []; }
-  w3.hop(r, 3); for (let i = 0; i < 12; i++) { E.coinStep(w3, cs3, 0, b => b === r); w3.step(1 / 30); w3.events = []; }
-  ok(r.got === 1, `같은 코인은 한 번만 (${r.got})`);
+  let free = 0;
+  for (const k of Object.keys(E.MAPS)) for (let r = 0; r < 3; r++) {
+    const w = E.createWorld(E.MAPS[k].str); fill(w); E.initCoins(w); const ps = [0, 1, 2].map(() => w.add('player'));
+    for (let i = 0; i < 90 * 30; i++) { w.step(1 / 30); free += E.coinStep(w, b => ps.includes(b)).length; w.events = []; }
+  }
+  ok(free === 0, `실려만 가는 상자는 코인을 못 먹는다 (맵 셋 × 3판 × 상자 셋, 먹은 수 ${free})`);
+  const w = E.createWorld(E.MAPS.switch.str); E.initCoins(w);
+  ok(w.coins.length === E.COIN_N && w.coins.every(c => !c.pending && w.T(c.cx, c.cy).t === 'belt'), `코인 ${w.coins.length}개, 모두 벨트 위`);
+  // 같은 레일: 코인 한 칸 뒤에 상자를 두고 10초
+  const c0 = w.coins.find(c => w.T(c.cx - 1, c.cy) && w.T(c.cx - 1, c.cy).t === 'belt' && w.T(c.cx, c.cy).d === 0) || w.coins[0];
+  w.coins = [c0]; c0.s = 0; c0.t = 99; const q = w.add('player'); q.cx = c0.cx - 1; q.cy = c0.cy; q.d = 0; q.s = 0;
+  let minGap = 9, cs0 = c0.cx + c0.s; for (let i = 0; i < 30; i++) { w.step(1 / 30); if (!c0.pending) minGap = Math.min(minGap, (c0.cx + c0.s) - (q.cx + q.s)); w.events = []; }
+  ok((c0.cx + c0.s) - cs0 > .6 && (c0.cx + c0.s) - cs0 < .9, `코인은 벨트보다 느림 (1초에 ${((c0.cx + c0.s) - cs0).toFixed(2)}칸, 벨트 ${E.BASE})`);
+  ok(minGap >= .6, `같은 레일 뒤 상자는 코인 뒤에서 줄 섬 (가장 가까운 간격 ${minGap.toFixed(2)}칸)`);
+  ok(E.coinStep(w, b => b === q).length === 0, '줄 선 상자는 코인을 못 먹음');
+  // 옆 레일에서 나란할 때 넘기: 분기 맵 3·4번 줄(둘 다 →). 코인을 4번 줄 x=4에, 상자를 3번 줄 x=1에 두고 따라잡다 ready에 넘는다
+  const w2 = E.createWorld(E.MAPS.switch.str); const c = { id: 1, coin: true, cx: 4, cy: 4, d: 0, s: 0, follow: 1, pending: false, t: 99 }; w2.coins = [c];
+  const r = w2.add('player'); r.cx = 1; r.cy = 3; r.d = 0; r.s = 0;
+  let hopped = false; const early = E.coinDir(w2, r, c);
+  for (let i = 0; i < 300 && !hopped; i++) { const d = E.coinDir(w2, r, c); if (d.ready) hopped = !!w2.hop(r, d.h); w2.step(1 / 30); w2.events = []; }
+  let n = 0; for (let i = 0; i < 30; i++) { n += E.coinStep(w2, b => b === r).length; w2.step(1 / 30); w2.events = []; }
+  ok(early.on && !early.ready && hopped && n === 1 && r.got === 1, `옆 레일에서 따라잡다 나란할 때 넘으면 닿아서 먹음 (넘음 ${hopped}, 먹음 ${n})`);
+  r.slide = null; w2.hop(r, 3); let again = 0; for (let i = 0; i < 20; i++) { again += E.coinStep(w2, b => b === r).length; w2.step(1 / 30); w2.events = []; }
+  ok(again === 0 && r.got === 1, '같은 코인은 한 번만');
 }
 
 // 9. 분기 맵: 일반 상자는 분기 칸이나 그 바로 앞뒤에서만 넘어가고, 덜컹 이벤트에 분기 칸 여부가 붙는다

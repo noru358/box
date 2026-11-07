@@ -1,8 +1,8 @@
 // ===== 사람 기록: 숨는 쪽 판의 내 움직임을 남겨, 찾는 쪽 판의 숨은 AI가 따라 하게 한다(ai.js) =====
 // 숨는 쪽 판에서 내 입력을 신호 기준으로 남긴다. 초록 한 번 = 창(window) 하나:
-// {need: 초록 시작 때 노리는 코인 경계 레일까지 남은 줄 수(0,1,2=2 이상), g: 그 초록의 길이(초), hops: [{ph: 'g'|'y'|'r' 옮긴 순간의 신호, t: 그 신호가 켜진 뒤 초, dir: 1 코인 쪽(건너기 포함), -1 반대쪽, 0 코인 없음}]}
+// {need: 초록 시작 때 노리는 코인을 먹기까지 넘어갈 횟수(0 코인 없음, 1, 2=2 이상), g: 그 초록의 길이(초), hops: [{ph: 'g'|'y'|'r' 옮긴 순간의 신호, t: 그 신호가 켜진 뒤 초, dir: 1 코인 쪽(건너기 포함), -1 반대쪽, 0 코인 없음}]}
 // 아무것도 안 한 초록도 창으로 남긴다(사람이 기다린 것도 패턴이다). 판이 끝나면 저장: 아티팩트에선 공유 db(plays), 아니면 이 브라우저.
-const HUMAN_VER=5,HUMAN_KEY='box-human5'; // 5: 코인이 경계로 바뀌어 need·dir 뜻이 바뀜(v13.5) // 사람 창이 이만큼 모이면 숨은 AI가 사람 기록을 쓴다
+const HUMAN_VER=6,HUMAN_KEY='box-human6'; // 6: 코인이 레일 위를 굴러가는 물건이 되고 need = 먹기까지 넘어갈 횟수(v13.7) // 사람 창이 이만큼 모이면 숨은 AI가 사람 기록을 쓴다
 let rec=null,humanPlays=[],humanSrc='none',DB=null;
 function recLight(s){if(!rec||!player)return;const now=world.t;
   if(rec.cur&&rec.cur.ph==='g'&&s!=='green')rec.cur.g=+(now-rec.cur.t0).toFixed(2);

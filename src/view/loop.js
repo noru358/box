@@ -15,16 +15,16 @@ function frame(now){const raw=(now-last)/1000,dt=Math.min(.05,raw);last=now;if(r
     if(live&&mode==='hide'&&!cl)world.boxes.forEach(b=>{if(b.gone||b.pending)return;const it=inTun(b);if(it&&!b.wasTun)b.tunY=b.cy;if(!it&&b.wasTun&&b.tunY!=null&&b.cy!==b.tunY){b.sus=0;if(b===player)say('직원이 놓쳤다',1.2);}b.wasTun=it;});
     if(live&&mode==='hide'&&hopQ&&player&&!world.midMove(player)){const q=hopQ;hopQ=null;if(performance.now()-q.t<300)playerHop(q.h);}
     if(cl){if(live&&world.light==='yellow'&&world.lightT>=DIFF[DIFF_KEY].yellow)world.setLight('red');}else if(live&&mode==='hide'){sig(world,dt);
-      const c=player.coin;if(c&&world.light==='green'&&world.lightT>.6&&world.boxes.some(b=>{if(b.gone||b.pending)return false;const [x,y]=world.pos(b);return Math.abs(x-c.x)<=1.5&&Math.abs(y-c.y)<=1.5;})&&Math.random()<dt*.9)world.setLight('yellow');} // 코인 근처에 상자가 있으면 AI 직원이 더 자주 돌아본다
+      const c=player.coin;if(c&&!c.pending&&world.light==='green'&&world.lightT>.6&&world.boxes.some(b=>{if(b.gone||b.pending)return false;const [x,y]=world.pos(b),[cx,cy]=world.pos(c);return Math.abs(x-cx)<=1.5&&Math.abs(y-cy)<=1.5;})&&Math.random()<dt*.9)world.setLight('yellow');} // 코인 근처에 상자가 있으면 AI 직원이 더 자주 돌아본다
     else if(live&&mode==='seek')seekSignal(dt);else if(!live)idleSig(world,dt);
-    // 코인(engine.js coinStep): 수명 다 되면 옮기고, 이번 프레임 넘어가기 중 코인 경계를 지난 것을 먹는다.
+    // 코인(engine.js): 움직임·수명·새로 나오기는 world.step이, 먹기는 coinStep(몸에 닿은 코인)이.
     // 숨는 쪽 판은 나, 찾는 쪽 판은 AI 숨은 상자. 친구 상자는 친구 화면이 판정해 알려 온다(net.js)
     if(live&&!over&&!cl){const hid=mode==='hide'?[player]:bots.filter(b=>!b.remote);
-      const got=coinStep(world,coins,dt,b=>hid.includes(b)&&!b.gone&&!b.found&&!b.pending);syncCoins();
+      const got=coinStep(world,b=>hid.includes(b)&&!b.gone&&!b.found&&!b.pending);
       for(const [b] of got){coinScored(b);if(over)break;}
       if(!over)(mode==='hide'?[player]:bots).forEach(b=>{if(b&&!b.gone)aimCoin(b);});}
-    world.step(dt);
-    if(cl&&live&&!over)for(const c of coinTouched(world,player,coins))if(!player.took.has(c.id)){player.took.add(c.id);netCoin(c.id);say(`코인 ${player.got+1}/${goal}`);} // 친구와 하기: 코인도 숨는 쪽 화면이 판정해 알린다
+    world.step(dt);syncCoins();
+    if(cl&&live&&!over)for(const c of coinTouched(world,player))if(!player.took.has(c.id)){player.took.add(c.id);netCoin(c.id);say(`코인 ${player.got+1}/${goal}`);} // 친구와 하기: 코인도 숨는 쪽 화면이 판정해 알린다
     world.events.forEach(ev=>{
       if(cl&&live&&ev.b===player&&(ev.type==='frozen'||(ev.type==='thud'&&ev.off)))netAlert(); // 친구와 하기: 걸림은 숨는 쪽 화면이 정해서 알린다
       if(ev.type==='thud'){const m=meshes.get(ev.b);if(m)m.bump=.3;if(ev.off&&!ev.b.remote)alertOn(ev.b);if(live&&mode==='hide'&&ev.off)sus(ev.b,3.6);if(live&&mode==='hide'&&world.hasSwitches&&!ev.off&&!ev.sw&&!ev.tun)sus(ev.b,1.6);}
@@ -37,7 +37,8 @@ function frame(now){const raw=(now-last)/1000,dt=Math.min(.05,raw);last=now;if(r
 
     world.boxes.forEach(b=>{const m=meshFor(b);if(b.gone||b.pending||inTun(b)){m.g.visible=false;return;}m.g.visible=true;
       let [x,y]=world.pos(b);if(b.vo){x+=b.vo[0];y+=b.vo[1];const k=Math.exp(-dt/.12);b.vo[0]*=k;b.vo[1]*=k;if(Math.abs(b.vo[0])+Math.abs(b.vo[1])<.01)b.vo=null;}let h=0;if(m.bump>0){m.bump-=dt;h=Math.abs(Math.sin(m.bump*30))*.15;}m.g.position.set(wx(x),h,wz(y));});
-    coins.forEach((c,i)=>{const g=coinMeshes.get(c.id);if(!g)return;const k=g.userData.coin,f=Math.max(0,c.t/COIN_LIFE);
+    world.coins.forEach((c,i)=>{const g=coinMeshes.get(c.id);if(!g)return;const k=g.userData.coin,f=Math.max(0,(c.t||0)/COIN_LIFE);
+      if(c.pending){g.visible=false;return;}{const [x,y]=world.pos(c);g.position.set(wx(x),inTun(c)?2.3:0,wz(y));} // 터널 안이면 덮개 위로 띄워 보이게
       g.visible=!(mode==='hide'&&player&&player.took&&player.took.has(c.id)); // 내가 먹은 코인은 내 화면에서만 지운다(남들 화면엔 그대로라 들통나지 않음)
       k.scale.y=k.scale.z=.6+.4*f;k.visible=!(c.t<3&&Math.floor(now/120)%2);
       k.quaternion.copy(cam.quaternion).multiply(coinQ);k.scale.x=(.25+.75*Math.abs(Math.cos(now/260+i)))*(.6+.4*f);k.position.y=1.1+.12*Math.sin(now/300+i);}); // 크기가 수명, 폭이 변하며 도는 것처럼(v13.5 모양) // 동전 면이 늘 카메라를 본다
@@ -50,10 +51,10 @@ function frame(now){const raw=(now-last)/1000,dt=Math.min(.05,raw);last=now;if(r
   if(msgT>0){msgT-=dt;if(msgT<=0)$('msg').hidden=true;}
   if(follow&&mode==='hide'&&player&&!player.pending){const [px]=world.pos(player);const tx=Math.max(follow.min,Math.min(follow.max,wx(px)));follow.cx+=(tx-follow.cx)*Math.min(1,dt*4);
     cam.position.set(follow.cx+follow.off.x,follow.off.y,follow.cz+follow.off.z);cam.lookAt(follow.cx,0,follow.cz);}
-  {const e=$('edgeMark');let show=false;if(follow&&mode==='hide'&&player&&player.coin&&!over){edgeV.set(wx(player.coin.x),1,wz(player.coin.y)).project(cam);
+  {const e=$('edgeMark');let show=false;if(follow&&mode==='hide'&&player&&player.coin&&!player.coin.pending&&!over){{const [ex,ey]=world.pos(player.coin);edgeV.set(wx(ex),1,wz(ey)).project(cam);}
     if(edgeV.x<-1||edgeV.x>1){show=true;const r=stage.getBoundingClientRect();e.textContent=edgeV.x<0?'◀ 코인':'코인 ▶';e.style.left=edgeV.x<0?'6px':'';e.style.right=edgeV.x<0?'':'6px';e.style.top=Math.max(40,Math.min(r.height-40,(1-edgeV.y)/2*r.height))+'px';}}
     e.hidden=!show;}
   R.render(S,cam);requestAnimationFrame(frame);}
 // 테스트용 들여다보기(화면 흐름 테스트가 씀)
-window.__box={scan:id=>{const b=world.boxes.find(o=>o.id===id);if(b&&mode==='seek'&&!over)scanBox(b);},s2w:(x,y)=>screenToWorld(x,y),human:{get plays(){return humanPlays.length;},get windows(){return humanWins().length;},get src(){return humanSrc;}},get bots(){return bots;},get mode(){return mode;},get player(){return player;},get world(){return world;},get over(){return over;},get net(){return net;},get time(){return time;},get coins(){return coins;}};
+window.__box={scan:id=>{const b=world.boxes.find(o=>o.id===id);if(b&&mode==='seek'&&!over)scanBox(b);},s2w:(x,y)=>screenToWorld(x,y),human:{get plays(){return humanPlays.length;},get windows(){return humanWins().length;},get src(){return humanSrc;}},get bots(){return bots;},get mode(){return mode;},get player(){return player;},get world(){return world;},get over(){return over;},get net(){return net;},get time(){return time;},get coins(){return world.coins;}};
 resize();menu();requestAnimationFrame(frame);

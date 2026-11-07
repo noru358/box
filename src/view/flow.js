@@ -23,7 +23,7 @@ function start(m){goFull();initSound();mode=m;over=false;paused=false;newWorld()
   hunt={t:2,target:null,aim:0,scans:15,stun:0};bots=[];hideMarks();player=null;rec=m==='hide'?{wins:[],cur:null,ps:world.t}:null;
   if(m==='hide'){player=world.add('player')||world.boxes[0];player.kind='player';player.got=0;recLight('green');[meArrow,worker].forEach(o=>o.visible=true);}
   else{const pers=['rush','careful','mimic'];for(let i=0;i<3;i++){const b=world.boxes[i];b.kind='bot';b.pers=pers[i];b.got=0;bots.push(b);}}
-  coins=initCoins(world);syncCoins();(m==='hide'?[player]:bots).forEach(aimCoin);
+  initCoins(world);syncCoins();(m==='hide'?[player]:bots).forEach(aimCoin);
   playUi(m,(m==='hide'?'<b>숨는 쪽</b>':'<b>찾는 쪽</b>')+` · ${curEntry().name}`);}
 // 메뉴판에서 판 화면 요소를 다 숨긴다(메뉴·친구와 하기 방 공용)
 function idleUi(label){mode=null;over=true;paused=false;hideMarks();touchUi(null);clearCoins();['hideTools','seekTools','pauseBtn','susWrap','timeWrap'].forEach(id=>$(id).hidden=true);$('goalL').textContent='';$('modeL').innerHTML=label;$('panel').hidden=false;}

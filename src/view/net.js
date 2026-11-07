@@ -31,7 +31,7 @@ function netStart(){if(!net||net.r!=='seek')return;const o=otherOf(ROOM.peers())
   net.ep=Date.now()%1e9;net.seen=Math.max(0,...((o.presence.q||[]).map(x=>x[0])));net.alSeen=o.presence.al||0;
   net.snapT=0;netPush({ph:'play',map:curKey,ep:net.ep,as:[[o.peer,b.id]],snap:netSnap(),res:null,win:null});}
 function netSnap(){world.boxes.forEach(b=>{const m=meshes.get(b);b.alert=!!(m&&m.alert);});
-  return {t:+time.toFixed(1),L:world.light,lt:+world.lightT.toFixed(2),pz:paused?1:0,bx:world.packBoxes(),po:coins.map(c=>[c.id,c.a[0],c.a[1],c.h,+c.t.toFixed(1)]),hs:bots.map(b=>[b.id,b.got|0,[...(b.took||[])],b.found?1:0,b.gone?1:0]),sc:[found,escaped,scans]};}
+  return {t:+time.toFixed(1),L:world.light,lt:+world.lightT.toFixed(2),pz:paused?1:0,bx:world.packBoxes(),po:world.packCoins(),hs:bots.map(b=>[b.id,b.got|0,[...(b.took||[])],b.found?1:0,b.gone?1:0]),sc:[found,escaped,scans]};}
 function remoteHop(b,h){if(b.found||b.gone||b.pending||mode!=='seek'||over)return;if(world.midMove(b)){b.q={h,t:performance.now()};return;}if(h%2!==b.d%2)world.hop(b,h);}
 function netCoin(id){net.cg=[...net.cg,[net.ep,id]].slice(-8);netPush({cg:net.cg});}
 function netHop(h){net.hopAt=performance.now();net.q=[...net.q,[++net.seq,h]].slice(-8);netPush({q:net.q});}
@@ -69,7 +69,7 @@ function applySnap(s){if(!world||!world.puppet||!player)return;time=s.t;net.froz
   world.loadBoxes(s.bx,b=>b===player&&performance.now()-net.hopAt<700); // 방금 내가 넘어간 건 술래 화면에 닿을 때까지 내 화면 그대로
   before.forEach((p,b)=>{if(b.gone||b.pending){b.vo=null;return;}const [x,y]=world.pos(b),dx=p[0]-x,dy=p[1]-y;b.vo=Math.hypot(dx,dy)<.8?[dx,dy]:null;});
   world.boxes.forEach(b=>{const m=meshFor(b);if(b.alert)alertOn(b);if(b.found&&!m.red){m.red=1;m.body.material=redMat;}});
-  coins=s.po.map(([id,ax,ay,h,t])=>({id,a:[ax,ay],b:[ax+DX[h],ay+DY[h]],h,x:ax+DX[h]/2,y:ay+DY[h]/2,t}));syncCoins();
+  world.loadCoins(s.po);syncCoins();
   hunt.scans=s.sc[2];const me=s.hs.find(h=>h[0]===player.id);
   if(me){if(me[1]>player.got)say(`코인 ${me[1]}/${goal}`);player.got=me[1];player.took=new Set([...me[2],...net.cg.filter(x=>x[0]===net.ep).map(x=>x[1])]);aimCoin(player); // 내가 방금 먹은 것(술래 확인 전)도 먹은 걸로
     if(me[3]&&!over){end(false,`코인 ${player.got}/${goal}에서 술래에게 찍힘.`,player.got*100);return;}
