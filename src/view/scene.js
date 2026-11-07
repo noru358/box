@@ -1,5 +1,5 @@
 // ===== 장면 준비: 상수, three.js 렌더러·카메라·조명, 맵 목록 =====
-const STAMP_LIFE=14,GAME_TIME=90; // 코인 하나의 수명(초), 판 시간(초)
+const GAME_TIME=90; // 판 시간(초). 코인 수·수명·목표는 engine.js COIN_N·COIN_LIFE·COIN_GOAL
 const SEEK_DENSITY=.28,HIDE_DENSITY=.42; // 상자 밀도(칸 수에 곱함). 찾는 쪽은 눈으로 쫓을 수 있게 적게(약 15개), 숨는 쪽은 미끼가 적당하게
 const DIFF_KEY='normal'; // 난이도는 '보통' 하나(engine.js DIFF)
 const $=id=>document.getElementById(id);

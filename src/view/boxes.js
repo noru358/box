@@ -13,27 +13,16 @@ function meshFor(b){if(b.pat==null)b.pat=newPat();let m=meshes.get(b);if(m){if(m
   const body=new THREE.Mesh(boxGeo,cardMats[b.id%3]);body.scale.set(b.size,b.size*.8,b.size);body.position.y=.33+b.size*.4;g.add(body);
   const lab=new THREE.Mesh(labelGeo,plainLabel);lab.position.y=.33+b.size*.8+.03;lab.scale.setScalar(b.size);g.add(lab);S.add(g);body.userData.box=b;lab.userData.box=b;m={g,body,lab,bump:0};meshes.set(b,m);decorate(m,b);return m;}
 function clearMeshes(){meshes.forEach(m=>S.remove(m.g));meshes=new Map();}
-// 코인(규칙 쪽 이름은 도장 stamp): 바닥 금색 고리 + 위에 떠서 도는 동전
-let stampMeshes=[];const goldRing=B('#f2a900'),coinMat=M('#ffcc33'),coinQ=new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1,0,0),Math.PI/2);const coinGeo=new THREE.CylinderGeometry(.75,.75,.18,24),stampRingGeo=new THREE.RingGeometry(1.05,1.45,4);
-function stampMesh(){const g=new THREE.Group();const r=new THREE.Mesh(stampRingGeo,goldRing);r.rotation.x=-Math.PI/2;r.rotation.z=Math.PI/4;r.position.y=.42;g.add(r);
-  const c=new THREE.Mesh(coinGeo,coinMat);c.position.y=2.6;g.add(c);g.userData.coin=c;S.add(g);stampMeshes.push(g);return g;}
-function clearStamps(){stampMeshes.forEach(g=>S.remove(g));stampMeshes=[];}
-// 공용 코인: 판에 POOL_N개. 아무나 어느 도장이든 찍을 수 있고, 각자 같은 도장은 한 번만. 찍어도 사라지지 않는다(사라지면 찍은 상자가 들통나서).
-// 도장마다 수명 STAMP_LIFE초, 다 되면 다른 곳에 새로. 내가 먹은 코인은 내 화면에서만 지운다(loop.js).
-const POOL_N=4;let pool=[],poolId=0;
-// 숨은 상자가 옆으로 안 넘어가고 실려만 가면 지나갈 칸들(출고구까지). 새 코인은 여기에 안 놓는다(가만히 있어도 코인을 먹던 문제)
-function railAhead(b,out){if(!b||b.gone||b.pending||b.found)return;let x=b.cx,y=b.cy;for(let i=0;i<world.W+world.H;i++){const t=world.T(x,y);if(!t||t.t==='exit')break;out.add(x+','+y);x+=DX[t.d];y+=DY[t.d];}}
-const hiders=()=>mode==='hide'?[player]:bots;
-function poolNew(){const used=pool.map(s=>[s.x,s.y]),ahead=new Set();hiders().forEach(b=>railAhead(b,ahead));const c=[];for(let y=0;y<world.H;y++)for(let x=2;x<world.W-2;x++){const t=world.T(x,y);if(!t||t.t!=='belt'||t.tun||ahead.has(x+','+y))continue;if(used.some(([ux,uy])=>Math.abs(ux-x)<=1&&Math.abs(uy-y)<=1))continue;c.push([x,y]);}
-  const free=c.filter(([x,y])=>!used.some(([,uy])=>uy===y));const src=free.length?free:c;if(!src.length)return null;const [x,y]=src[(Math.random()*src.length)|0];
-  const s={id:++poolId,x,y,t:STAMP_LIFE*(.7+Math.random()*.3),mesh:stampMesh()};s.mesh.position.set(wx(x),0,wz(y));return s;}
-function poolInit(){pool=[];for(let i=0;i<POOL_N;i++){const s=poolNew();if(s)pool.push(s);}}
-// 이 상자가 노릴 도장: 아직 안 찍은 것 중, 줄 차이와 앞쪽 거리로 가장 가까운 것
-function poolTarget(b){const t0=world.T(b.cx,b.cy);if(!t0)return null;const vert=t0.d%2===1;let best=null,bc=1e9;
-  for(const s of pool){if(b.took&&b.took.has(s.id))continue;const lane=vert?Math.abs(s.x-b.cx):Math.abs(s.y-b.cy);let fwd=vert?(s.y-b.cy)*DY[t0.d]:(s.x-b.cx)*DX[t0.d];if(fwd<0)fwd+=vert?world.H:world.W;
-    const cost=fwd/1.25+lane*.9+(fwd/1.25>s.t?6:0);if(cost<bc){bc=cost;best=s;}}return best;}
-function poolAim(b){const s=poolTarget(b);b.stamp=s?[s.x,s.y]:null;b.stampT=s?s.t:STAMP_LIFE;b.aimId=s?s.id:0;}
-function placeStamp(b){b.took=b.took||new Set();poolAim(b);}
+// 코인 그리기(규칙은 engine.js "코인"): 두 레일 사이 경계 위, 넘어가는 방향으로 놓인 금색 띠 + 위에 떠서 도는 동전.
+// 띠는 수명이 줄면 짧아지고, 3초 남으면 동전이 깜빡. 내가 먹은 코인은 내 화면에서만 지운다(loop.js)
+let coins=[],coinMeshes=new Map();
+const goldMat=B('#f2a900'),coinMat=M('#ffcc33'),coinGeo=new THREE.CylinderGeometry(.75,.75,.18,24),coinQ=new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1,0,0),Math.PI/2);
+function coinMesh(c){let g=coinMeshes.get(c.id);if(g)return g;g=new THREE.Group();
+  const bar=box('coinbar'+c.h,c.h===0?CS*.9:.55,.08,c.h===0?.55:CS*.9,goldMat);bar.position.y=.42;g.add(bar);
+  const k=new THREE.Mesh(coinGeo,coinMat);k.position.y=2.6;g.add(k);g.userData={coin:k,bar};g.position.set(wx(c.x),0,wz(c.y));S.add(g);coinMeshes.set(c.id,g);return g;}
+function syncCoins(){const ids=new Set(coins.map(c=>c.id));coinMeshes.forEach((g,id)=>{if(!ids.has(id)){S.remove(g);coinMeshes.delete(id);}});coins.forEach(coinMesh);}
+function clearCoins(){coins=[];syncCoins();}
+function aimCoin(b){b.took=b.took||new Set();b.coin=pickCoin(world,b,coins);}
 // 걸린 상자 표시
 const alertTex=(()=>{const c=document.createElement('canvas');c.width=64;c.height=96;const g=c.getContext('2d');g.fillStyle='#d6322a';g.beginPath();g.arc(32,40,30,0,Math.PI*2);g.fill();g.fillStyle='#fff';g.font='bold 52px sans-serif';g.textAlign='center';g.textBaseline='middle';g.fillText('!',32,42);return new THREE.CanvasTexture(c);})();
 const alertMat=new THREE.SpriteMaterial({map:alertTex,depthTest:false});

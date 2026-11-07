@@ -55,6 +55,16 @@ async def main():
       al2=await H.evaluate('__box.net.al');alert=await S.evaluate(f'(()=>{{const b=__box.world.boxes.find(o=>o.id==={rid});return !!(b.alert)}})()')
       if tun: print('  (터널 안이라 빨강 중 넘어가도 안 걸리는 게 규칙 — 이번엔 빨강 시험 건너뜀)')
       else: chk(al2>al1 and alert,f'{tag} 빨강 중 넘어가기: 걸림, 술래 화면 ! 뜸 ({await H.evaluate("__box.world.light")})')
+      # 코인: 숨는 쪽이 코인 경계 쪽으로 가서 코인 자리에서 건넌다(페이지 안에서 초록일 때만) → 술래 화면에서 숨은 상자 코인이 오른다
+      got0=await S.evaluate('__box.bots[0].got|0')
+      res=await H.evaluate('''new Promise(r=>{const B=__box,t0=performance.now();const press=h=>{const k=['ArrowRight','ArrowDown','ArrowLeft','ArrowUp'][h];document.dispatchEvent(new KeyboardEvent('keydown',{code:k,key:k,bubbles:true}));};
+        const f=()=>{const w=B.world,p=B.player;if(performance.now()-t0>25000)return r('시간 넘음');if(B.over)return r('판 끝남');
+          if(w.light==='green'&&w.lightT>.3&&!w.midMove(p)){let best=null;for(const c of B.coins){if(p.took&&p.took.has(c.id))continue;const d=coinDir(w,p,c);if(d.h<0)continue;if(d.ready){press(d.h);return setTimeout(()=>r('건넘 '+c.id),400);}if(!best||!d.on)best=d;}
+            if(best&&!best.on&&Math.random()<.05)press(best.h);}
+          requestAnimationFrame(f);};f();})''')
+      await asyncio.sleep(1)
+      got1=await S.evaluate('__box.bots[0].got|0');hg=await H.evaluate('__box.player.took.size')
+      chk(res.startswith('건넘') and got1==got0+1,f'{tag} 코인 경계 건너기: 숨는 쪽 판정 → 술래 화면 코인 {got0}→{got1} ({res}, 숨는 쪽 먹은 수 {hg})')
       # 술래가 스캔으로 찾음 → 둘 다 끝
       await S.evaluate(f'__box.scan({rid})');await asyncio.sleep(1.5)
       chk(await S.evaluate('__box.over'),tag+' 술래 쪽도 끝: '+(await S.text_content('#panelBox'))[:20])

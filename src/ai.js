@@ -16,8 +16,8 @@ function synthWin(pers,need,panic){const hops=[];
 // 분기 갈래 기본 패턴: 성격별로 분기 칸까지 기다릴 확률(나머지는 아무 데서나 지름)
 const SW_WAIT={rush:.5,careful:1,mimic:.9};
 function swWin(pers,w){return {need:w.need,hops:w.hops.map(h=>Object.assign({},h,{sw:h.sw!=null?h.sw:(chance(SW_WAIT[pers])?1:0)}))};}
-// 이 상자가 노리는 코인까지 남은 줄 수(0, 1, 2 = 2 이상)
-function needOf(w,b){if(!b||!b.stamp)return 0;const t=w.T(b.cx,b.cy),vert=t&&t.d%2===1;return Math.min(2,vert?Math.abs(b.stamp[0]-b.cx):Math.abs(b.stamp[1]-b.cy));}
+// 이 상자가 노리는 코인 경계의 레일까지 남은 줄 수(0 = 경계 레일 위라 건너기만 하면 됨, 1, 2 = 2 이상)
+function needOf(w,b){const g=b&&b.coin&&coinGap(w,b,b.coin);return g?Math.min(2,g.dl):0;}
 // 화면에 보이는 위치가 터널 덮개 아래인가(찾는 쪽에게 안 보임)
 function inTunnel(w,b){const [x,y]=w.pos(b);return w.isTunnel(Math.round(x),Math.round(y));}
 function pickWin(w,b,ctx){const need=needOf(w,b),pool=ctx.humanWins;
@@ -26,16 +26,18 @@ function pickWin(w,b,ctx){const need=needOf(w,b),pool=ctx.humanWins;
 // 사람이 노랑을 늦게 알아챈 시간: 기록에 노랑 중 움직임이 있으면 거기서, 없으면 성격값
 function reactOf(b,ctx){const ys=ctx.humanWins.flatMap(x=>x.hops).filter(h=>h.ph==='y');return ys.length&&b.src==='human'?ys[(Math.random()*ys.length)|0].t:PERS[b.pers].react*ctx.diff.k;}
 function botPlan(w,b,ctx){const x=pickWin(w,b,ctx);b.plan=(x.hops||[]).slice().sort((p,q)=>'gyr'.indexOf(p.ph)-'gyr'.indexOf(q.ph)||p.t-q.t);b.pi=0;b.react=reactOf(b,ctx);}
-function botHop(w,b,dir){const sd=stampDir(w,b,b.stamp);let h=-1;
+function botHop(w,b,dir){const sd=coinDir(w,b,b.coin).h;let h=-1;
   if(dir===1)h=sd;else if(dir===-1)h=sd>=0?(sd+2)%4:w.randSide(b);else h=w.randSide(b);
   if(h>=0)w.hop(b,h);b.pi++;}
 function botThink(w,b,dt,ctx){if(b.found||b.gone||b.pending)return;if(!b.plan)botPlan(w,b,ctx);if(w.midMove(b))return;
-  if(inTunnel(w,b)){const h=stampDir(w,b,b.stamp),[bx,by]=w.pos(b);if(h>=0&&w.isTunnel(Math.round(bx+DX[h]),Math.round(by+DY[h]))&&Math.random()<dt*3){w.hop(b,h);return;}} // 터널 안이면 안 보이니 코인 쪽으로 갈아탐
+  if(inTunnel(w,b)){const h=coinDir(w,b,b.coin).h,[bx,by]=w.pos(b);if(h>=0&&w.isTunnel(Math.round(bx+DX[h]),Math.round(by+DY[h]))&&Math.random()<dt*3){w.hop(b,h);return;}} // 터널 안이면 안 보이니 코인 쪽으로 갈아탐
   const hp=b.plan[b.pi];if(!hp)return;const L=w.light,lt=w.lightT;
-  // 분기 칸에서 넘어간 움직임이면 분기 칸에 올 때까지 기다린다. 코인 수명이 3초 안 남았으면 그냥 지른다
-  const waitSw=hp.sw===1&&hp.ph==='g'&&!(()=>{const [x,y]=w.pos(b);return w.isSwitch(Math.round(x),Math.round(y));})()&&!(b.stampT<3);
-  if(hp.ph==='g'){if(L==='green'){if(lt>=hp.t&&!waitSw)botHop(w,b,hp.dir);}
-    else if(L==='yellow'&&lt<b.react)botHop(w,b,hp.dir); // 노랑을 아직 못 봤다
+  // 코인 쪽으로 가는 움직임인데 이미 코인 경계 레일 위면, 코인 자리에 올 때까지 기다렸다 건넌다(아무 데서나 건너면 못 먹음).
+  // 분기 칸에서 넘어간 움직임이면 분기 칸에 올 때까지 기다린다. 코인 수명이 3초 안 남았거나 지금이 코인 자리면 안 기다린다
+  const cd=coinDir(w,b,b.coin),waitCoin=hp.dir===1&&cd.on&&!cd.ready;
+  const waitSw=!cd.ready&&hp.sw===1&&hp.ph==='g'&&!(()=>{const [x,y]=w.pos(b);return w.isSwitch(Math.round(x),Math.round(y));})()&&!(b.coin&&b.coin.t<3);
+  if(hp.ph==='g'){if(L==='green'){if(lt>=hp.t&&!waitCoin&&!waitSw)botHop(w,b,hp.dir);}
+    else if(L==='yellow'&&lt<b.react&&!waitCoin)botHop(w,b,hp.dir); // 노랑을 아직 못 봤다
     else b.pi++;}
   else if(hp.ph==='y'){if(L==='yellow'&&lt>=hp.t)botHop(w,b,hp.dir);else if(L==='red')b.pi++;}
   else if(L==='red'&&lt>=hp.t)botHop(w,b,hp.dir);}

@@ -2,7 +2,7 @@
 const KD={KeyD:0,ArrowRight:0,KeyS:1,ArrowDown:1,KeyA:2,ArrowLeft:2,KeyW:3,ArrowUp:3};
 // 넘어가는 0.38초 중에 누른 건 버리지 않고 하나 기억했다가 다 넘어가면 바로 한다(0.3초 안에 누른 것만)
 let hopQ=null;
-function playerHop(h){if(mode!=='hide'||over||paused||!player)return;if(world.midMove(player)){hopQ={h,t:performance.now()};return;}hopQ=null;const sd=stampDir(world,player,player.stamp),sw=(()=>{const [x,y]=world.pos(player);return world.isSwitch(Math.round(x),Math.round(y));})();if(world.hop(player,h)){recHop(sd<0?0:(h===sd?1:-1),sw,!!(player.slide&&player.slide.hid));if(net&&net.role==='hider')netHop(h);}}
+function playerHop(h){if(mode!=='hide'||over||paused||!player)return;if(world.midMove(player)){hopQ={h,t:performance.now()};return;}hopQ=null;const sd=coinDir(world,player,player.coin).h,sw=(()=>{const [x,y]=world.pos(player);return world.isSwitch(Math.round(x),Math.round(y));})();if(world.hop(player,h)){recHop(sd<0?0:(h===sd?1:-1),sw,!!(player.slide&&player.slide.hid));if(net&&net.role==='hider')netHop(h);}}
 // 키보드·스와이프·버튼이 모두 이 함수로: 옆 방향이면 레일 넘어가기(진행 방향은 무시)
 function hideInput(h){if(mode!=='hide'||over||paused||!player||player.pending)return;if(h%2!==player.d%2)playerHop(h);}
 addEventListener('keydown',e=>{if(e.target.tagName==='TEXTAREA'||e.target.tagName==='SELECT')return;if(e.repeat)return;

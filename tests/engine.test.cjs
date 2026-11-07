@@ -62,28 +62,26 @@ for (const k of Object.keys(E.MAPS)) {
   ok(frozen / reds > .1, `분기 칸 없음: 빨강 한 번에 걸린 상자 ${(frozen / reds).toFixed(2)}개`);
 }
 
-// 7. 도장은 화면에 보이는 위치로 찍힌다: 옆 레일로 넘어가는 0.38초 동안은 안 찍힘
+// 7. 코인(경계): 실려만 가서는 절대 못 먹고, 코인 자리에서 그 경계를 넘어가면 먹는다. 다른 자리에서 넘으면 못 먹는다
 {
-  let tested = false;
-  for (let tries = 0; tries < 30 && !tested; tries++) {
-  const w = E.createWorld(PLAIN);
-  const p = w.add('player');
-  for (let i = 0; i < 600 && !tested; i++) {
-    w.step(1 / 60); w.events = [];
-    if (w.midMove(p) || p.s > .3 || p.cx < 1 || p.cx > w.W - 3) continue;
-    for (const h of [(p.d + 1) % 4, (p.d + 3) % 4]) {
-      const nx = p.cx + E.DX[h], ny = p.cy + E.DY[h], t = w.T(nx, ny);
-      if (!t || t.t !== 'belt' || t.d !== p.d) continue;
-      const stamp = [nx + E.DX[p.d], ny]; // 한 칸 앞, 옆 레일
-      if (!w.hop(p, h)) continue;
-      const now = E.onStamp(w, p, stamp);
-      let later = false; for (let k = 0; k < 30; k++) { w.step(1 / 60); w.events = []; if (E.onStamp(w, p, stamp)) later = true; }
-      ok(!now && later, `도장: 넘어간 순간엔 안 찍히고(${now}), 미끄러져 다 오면 찍힘(${later})`);
-      tested = true; break;
-    }
-  }
-  }
-  ok(tested, '도장 판정 시험 상황을 만들었다');
+  const w = E.createWorld(E.MAPS.compact.str); fill(w);
+  const p = w.add('player'); let coins = E.initCoins(w);
+  ok(coins.length === E.COIN_N && coins.every(c => w.T(...c.a).t === 'belt' && w.T(...c.b).t === 'belt'), `코인 ${coins.length}개, 모두 두 벨트 사이 경계`);
+  let got = 0; for (let i = 0; i < 90 * 30; i++) { w.step(1 / 30); got += E.coinStep(w, coins, 1 / 30, b => b === p).length; w.events = []; }
+  ok(got === 0 && !(p.got > 0), `가만히 실려 가는 상자는 90초 동안 코인 0개 (${got})`);
+  // 코인 자리에서 넘어가기: 코인 경계 레일 위에 올려 두고 코인 열 바로 앞에서 기다렸다 넘는다
+  const w2 = E.createWorld(E.MAPS.compact.str); const q = w2.add('player'); const c = E.coinSeams(w2).find(s => !s.sw && s.a[0] >= 3 && w2.T(...s.a).d === 0 && w2.T(s.a[0] - 1, s.a[1]).t === 'belt' && w2.T(s.a[0] - 1, s.b[1]).t === 'belt');
+  const coin = { id: 1, a: c.a, b: c.b, h: c.h, x: c.x, y: c.y, t: 99 }; const cs = [coin];
+  q.cx = c.a[0] - 1; q.cy = c.a[1]; q.d = 0; q.s = .3; q.slide = null; // 화면 위치 = 코인 열 0.7칸 앞
+  let early = 0; { const h = E.coinDir(w2, q, coin); ok(h.on && !h.ready, '코인 경계 레일 위, 코인 자리 전: 아직 아님'); }
+  const hopped = !!w2.hop(q, 1); early = E.coinStep(w2, cs, 0, b => b === q).length; w2.events = [];
+  ok(hopped && early === 0, `코인 자리 0.7칸 앞에서 넘으면 못 먹음 (넘어감 ${hopped})`);
+  const w3 = E.createWorld(E.MAPS.compact.str); const r = w3.add('player'); r.cx = c.a[0]; r.cy = c.a[1]; r.d = 0; r.s = .2; r.slide = null;
+  const d3 = E.coinDir(w3, r, coin); ok(d3.ready && d3.h === 1, `코인 자리: 지금 아래로 넘으면 먹음 (h ${d3.h})`);
+  w3.hop(r, d3.h); const g3 = E.coinStep(w3, cs, 0, b => b === r); w3.events = [];
+  ok(g3.length === 1 && r.got === 1, '코인 자리에서 경계를 넘으면 먹음');
+  r.slide = null; r.s = .2; w3.hop(r, 3); const again = E.coinStep(w3, cs, 0, b => b === r).length; w3.events = [];
+  ok(again === 0 && r.got === 1, '같은 코인은 한 번만');
 }
 
 // 9. 분기 맵: 일반 상자는 분기 칸이나 그 바로 앞뒤에서만 넘어가고, 덜컹 이벤트에 분기 칸 여부가 붙는다

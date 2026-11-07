@@ -19,14 +19,14 @@ function initSound(){if(AC)return;try{const C=window.AudioContext||window.webkit
 function playUi(m,label){$('panel').hidden=true;$('susWrap').hidden=m!=='hide';$('hideTools').hidden=m!=='hide';$('seekTools').hidden=m!=='seek';$('timeWrap').hidden=false;$('pauseBtn').hidden=false;touchUi(m);
   $('modeL').innerHTML=label;cv.style.cursor=m==='seek'?'crosshair':'default';hud={};updHud();}
 function start(m){goFull();initSound();mode=m;over=false;paused=false;newWorld();fitCam();
-  goal=STAMPS;time=GAME_TIME;scans=6;found=0;escaped=0;sig=signalAI(DIFF[DIFF_KEY]);world.setLight('green');t0=performance.now();clearStamps();
+  goal=COIN_GOAL;time=GAME_TIME;scans=6;found=0;escaped=0;sig=signalAI(DIFF[DIFF_KEY]);world.setLight('green');t0=performance.now();clearCoins();
   hunt={t:2,target:null,aim:0,scans:15,stun:0};bots=[];hideMarks();player=null;rec=m==='hide'?{wins:[],cur:null,ps:world.t}:null;
-  if(m==='hide'){player=world.add('player')||world.boxes[0];player.kind='player';player.got=0;player.mustHop=true;recLight('green');[meArrow,worker].forEach(o=>o.visible=true);}
-  else{const pers=['rush','careful','mimic'];for(let i=0;i<3;i++){const b=world.boxes[i];b.kind='bot';b.pers=pers[i];b.got=0;b.mustHop=true;bots.push(b);}}
-  poolInit();hiders().forEach(placeStamp); // 코인은 숨은 상자를 만든 뒤에 놓는다(처음부터 실려 가는 길에 놓이지 않게)
+  if(m==='hide'){player=world.add('player')||world.boxes[0];player.kind='player';player.got=0;recLight('green');[meArrow,worker].forEach(o=>o.visible=true);}
+  else{const pers=['rush','careful','mimic'];for(let i=0;i<3;i++){const b=world.boxes[i];b.kind='bot';b.pers=pers[i];b.got=0;bots.push(b);}}
+  coins=initCoins(world);syncCoins();(m==='hide'?[player]:bots).forEach(aimCoin);
   playUi(m,(m==='hide'?'<b>숨는 쪽</b>':'<b>찾는 쪽</b>')+` · ${curEntry().name}`);}
 // 메뉴판에서 판 화면 요소를 다 숨긴다(메뉴·친구와 하기 방 공용)
-function idleUi(label){mode=null;over=true;paused=false;hideMarks();touchUi(null);clearStamps();['hideTools','seekTools','pauseBtn','susWrap','timeWrap'].forEach(id=>$(id).hidden=true);$('goalL').textContent='';$('modeL').innerHTML=label;$('panel').hidden=false;}
+function idleUi(label){mode=null;over=true;paused=false;hideMarks();touchUi(null);clearCoins();['hideTools','seekTools','pauseBtn','susWrap','timeWrap'].forEach(id=>$(id).hidden=true);$('goalL').textContent='';$('modeL').innerHTML=label;$('panel').hidden=false;}
 
 function menu(){if(net)netLeave();idleUi('<b>메뉴</b>');newWorld();
   const opts=mapList().map(m=>`<option value="${m.k}"${m.k===curKey?' selected':''}>${m.name}</option>`).join('');
@@ -44,7 +44,7 @@ function end(win,text){if(over)return;over=true;if(net&&net.role==='host')netPus
   if(net){$('swap').hidden=true;$('again').textContent='방으로';$('again').onclick=()=>netLobby();$('again').focus();return;}
   $('again').onclick=()=>start(mode);$('swap').onclick=()=>start(mode==='hide'?'seek':'hide');$('again').focus();}
 function pause(){if(over||!mode||paused)return;paused=true;$('panel').hidden=false;
-  $('panelBox').innerHTML=`<h1>일시정지</h1><div class="row"><button id="resume">계속하기</button><button class="alt" id="restart">처음부터</button><button class="alt" id="quit">메뉴로 나가기</button></div><p>나가면 이번 판은 기록되지 않아요.</p>`;
+  $('panelBox').innerHTML=`<h1>일시정지</h1><div class="row"><button id="resume">계속하기</button><button class="alt" id="restart">처음부터</button><button class="alt" id="quit">메뉴로 나가기</button></div><p>나가면 이번 판은 기록되지 않아요.</p><p class="note">화면 ${fps|0} FPS</p>`;
   if(net)$('restart').hidden=true;
   $('resume').onclick=resume;$('restart').onclick=()=>start(mode);$('quit').onclick=()=>menu();$('resume').focus();}
 function resume(){paused=false;$('panel').hidden=true;}

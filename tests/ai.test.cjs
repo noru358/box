@@ -27,30 +27,38 @@ const fill = (w, k = .28) => { const n = w.tiles.flat().filter(t => t && t.t !==
     ok(!aimed, 'AI 직원: 터널 덮개 아래 상자는 못 겨눔'); }
 }
 
-// 2. 숨은 AI: 기본 패턴으로 90초 돌리면 대부분 초록에 넘어가고, 분기 칸에서 넘어가는 비율이 높다
+// 2. 숨은 AI: 기본 패턴으로 90초 판 세 번(난수라 한 판은 들쭉날쭉해서 합으로 본다).
+//    빨강에 걸리는 일이 드물고, 분기 칸에서 넘어가는 비율이 높고, 코인 경계를 건너 코인을 먹는다
 {
-  const w = E.createWorld(E.MAPS.compact.str); fill(w);
-  const sig = E.signalAI(E.DIFF.normal), ctx = { humanWins: [], time: 90, diff: E.DIFF.normal };
-  const bots = w.boxes.slice(0, 3); ['rush', 'careful', 'mimic'].forEach((p, i) => { bots[i].kind = 'bot'; bots[i].pers = p; });
-  const aim = b => { const r = b.cy <= 3 ? 6 : 1; b.stamp = [4, r]; }; // 코인은 반대편 줄에 있다고 친다
-  let hops = 0, green = 0, red = 0, sw = 0;
-  for (let i = 0; i < 90 * 30; i++) {
-    sig(w, 1 / 30); bots.forEach(aim); ctx.time = 90 - i / 30;
-    bots.forEach(b => E.botThink(w, b, 1 / 30, ctx)); w.step(1 / 30);
-    for (const e of w.events) {
-      if (e.type === 'light' && e.s === 'green') bots.forEach(b => E.botPlan(w, b, ctx));
-      if (e.type === 'thud' && bots.includes(e.b)) { hops++; if (w.light === 'green') green++; if (e.off) red++; if (e.sw) sw++; }
+  let hops = 0, green = 0, red = 0, sw = 0, got = 0; const per = []; let synth = true;
+  for (let game = 0; game < 3; game++) {
+    const w = E.createWorld(E.MAPS.compact.str); fill(w);
+    const sig = E.signalAI(E.DIFF.normal), ctx = { humanWins: [], time: 90, diff: E.DIFF.normal };
+    const bots = w.boxes.slice(0, 3); ['rush', 'careful', 'mimic'].forEach((p, i) => { bots[i].kind = 'bot'; bots[i].pers = p; });
+    const coins = E.initCoins(w); const aim = b => { b.took = b.took || new Set(); b.coin = E.pickCoin(w, b, coins); };
+    for (let i = 0; i < 90 * 30; i++) {
+      sig(w, 1 / 30); bots.forEach(aim); ctx.time = 90 - i / 30;
+      bots.forEach(b => E.botThink(w, b, 1 / 30, ctx)); E.coinStep(w, coins, 1 / 30, b => bots.includes(b)); w.step(1 / 30);
+      for (const e of w.events) {
+        if (e.type === 'light' && e.s === 'green') bots.forEach(b => E.botPlan(w, b, ctx));
+        if (e.type === 'thud' && bots.includes(e.b)) { hops++; if (w.light === 'green') green++; if (e.off) red++; if (e.sw) sw++; }
+      }
+      w.events = [];
     }
-    w.events = [];
+    synth = synth && bots.every(b => b.src === 'synth');
+    per.push(bots.map(b => Math.min(E.COIN_GOAL, b.got | 0)).join(',')); got += bots.reduce((a, b) => a + Math.min(E.COIN_GOAL, b.got | 0), 0);
   }
-  ok(hops > 10 && red / hops < .15, `숨은 AI: 넘어가기 ${hops}번 중 초록 ${green}번, 빨강에 걸림 ${red}번(드물어야, 나머지는 노랑 늦게·터널 안)`);
-  ok(sw / hops > .3, `숨은 AI: 분기 칸에서 넘어간 비율 ${(sw / hops).toFixed(2)}`);
-  ok(bots.every(b => b.src === 'synth'), '숨은 AI: 사람 기록이 없으면 기본 패턴');
+  console.log(`     세 판 숨은 AI 코인(4개에서 멈춘다고 치고): ${per.join(' / ')}`);
+  ok(hops > 30 && red / hops < .15, `숨은 AI: 넘어가기 ${hops}번 중 빨강에 걸림 ${red}번 (15% 미만)`);
+  // 기준 0.2: v13.5부터 코인은 코인 자리에서 건너야 하고, 코인 절반쯤은 분기 칸 옆이 아니다(그 코인은 티 나는 대신 가까울 때만 노림)
+  ok(sw / hops > .2, `숨은 AI: 분기 칸에서 넘어간 비율 ${(sw / hops).toFixed(2)} (0.2 넘게)`);
+  ok(synth, '숨은 AI: 사람 기록이 없으면 기본 패턴');
+  ok(got >= 9, `숨은 AI: 코인 경계를 건너 코인을 먹는다 (세 판 아홉 상자 합 ${got}개, 한 상자 평균 1개 이상)`);
 }
 
 // 3. 사람 기록이 HUMAN_MIN개 넘으면 사람 창을 쓴다
 {
-  const w = E.createWorld(E.MAPS.compact.str); const b = w.add('npc'); b.kind = 'bot'; b.pers = 'rush'; b.stamp = [4, b.cy === 1 ? 3 : 1];
+  const w = E.createWorld(E.MAPS.compact.str); const b = w.add('npc'); b.kind = 'bot'; b.pers = 'rush'; b.coin = E.initCoins(w)[0];
   const wins = Array.from({ length: E.HUMAN_MIN }, () => ({ need: 2, g: 2, hops: [{ ph: 'g', t: .5, dir: 1, sw: 0 }] }));
   E.botPlan(w, b, { humanWins: wins, time: 60, diff: E.DIFF.normal });
   ok(b.src === 'human' && b.plan.length === 1, `숨은 AI: 사람 창 ${wins.length}개면 사람 기록을 따라 함 (${b.src})`);
