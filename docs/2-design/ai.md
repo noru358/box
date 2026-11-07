@@ -1,4 +1,4 @@
-# AI (src/game.html)
+# AI (src/ai.js, 화면 연출은 src/view/hunter.js)
 
 ← [문서 지도](../../README.md) · 숫자는 [balance.md](balance.md)
 

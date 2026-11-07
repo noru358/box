@@ -4,7 +4,7 @@
   "description": "택배 숨바꼭질 프로토타입",
   "scripts": {
     "build": "node src/build.mjs",
-    "test": "node tests/engine.test.cjs && node tests/smoke.cjs && node tests/smoke.cjs --full",
-    "check": "node src/build.mjs && node tests/engine.test.cjs && node tests/smoke.cjs && node tests/smoke.cjs --full"
+    "test": "node tests/engine.test.cjs && node tests/ai.test.cjs && node tests/smoke.cjs",
+    "check": "node src/build.mjs && node tests/engine.test.cjs && node tests/ai.test.cjs && node tests/smoke.cjs"
   }
 }

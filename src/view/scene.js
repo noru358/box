@@ -1,0 +1,24 @@
+// ===== 장면 준비: 상수, three.js 렌더러·카메라·조명, 맵 목록 =====
+const STAMP_LIFE=14,GAME_TIME=90; // 코인 하나의 수명(초), 판 시간(초)
+const SEEK_DENSITY=.28,HIDE_DENSITY=.42; // 상자 밀도(칸 수에 곱함). 찾는 쪽은 눈으로 쫓을 수 있게 적게(약 15개), 숨는 쪽은 미끼가 적당하게
+const DIFF_KEY='normal'; // 난이도는 '보통' 하나(engine.js DIFF)
+const $=id=>document.getElementById(id);
+const cv=$('c'),stage=$('stage');
+const R=new THREE.WebGLRenderer({canvas:cv,antialias:true});R.setPixelRatio(Math.min(2,devicePixelRatio));
+const S=new THREE.Scene();S.background=new THREE.Color('#d6d0c2');
+const cam=new THREE.PerspectiveCamera(36,16/9,.5,400);
+S.add(new THREE.HemisphereLight('#ffffff','#8c8574',.95));const sun=new THREE.DirectionalLight('#fff4e0',.55);sun.position.set(-10,30,12);S.add(sun);
+function resize(){const r=stage.getBoundingClientRect();if(!r.width||!r.height)return;R.setSize(r.width,r.height,false);cam.aspect=r.width/r.height;cam.updateProjectionMatrix();fitCam();}
+addEventListener('resize',resize);
+// 재질은 색마다 한 번만 만들어 같이 쓴다(판마다 새로 만들고 안 버리면 폰에서 점점 무거워짐)
+const _mats={};
+const M=c=>_mats['L'+c]||(_mats['L'+c]=new THREE.MeshLambertMaterial({color:c}));
+const B=c=>_mats['B'+c]||(_mats['B'+c]=new THREE.MeshBasicMaterial({color:c,side:THREE.DoubleSide}));
+const CS=3.4,DV=[[1,0],[0,1],[-1,0],[0,-1]];
+const floor=new THREE.Mesh(new THREE.PlaneGeometry(200,120),M('#cfc8b8'));floor.rotation.x=-Math.PI/2;S.add(floor);
+
+// ---------- 맵 목록 ----------
+const mapList=()=>['compact','switch','loop'].map(k=>({k,name:MAPS[k].name,str:MAPS[k].str}));
+let curKey='compact';
+const wopt=()=>({diff:DIFF_KEY});
+const curEntry=()=>mapList().find(m=>m.k===curKey)||mapList()[0];

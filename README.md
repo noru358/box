@@ -36,14 +36,16 @@ npm run check
    - `architecture.md` 파일 구조와 흐름
    - `engine.md` 상자 이동, 신호, 걸림 판정, 도장, 시간 보정
    - `ai.md` AI 직원과 숨은 AI
-   - `map-format.md` 맵 공유 문자열과 편집기
+   - `map-format.md` 맵 공유 문자열, 새 칸 종류 넣기
    - `balance.md` 조절 손잡이와 지금 값
 
 ## 폴더
 
 ```
 src/engine.js     규칙만 (화면 없음, node로 테스트 가능)
-src/game.html     3D 화면, 조작, 메뉴, 편집기, 기록 (/*ENGINE*/ 자리에 엔진이 들어감)
+src/ai.js         숨은 AI·AI 직원 판단 (규칙 쪽, node 테스트)
+src/view/*.js     화면(칸 그리기·효과·흐름·입력·기록·멀티·루프)
+src/game.html     HTML·CSS 껍데기 (/*ENGINE*/, /*VIEW*/ 자리에 위 파일들이 들어감)
 src/build.mjs     둘을 합쳐 dist/index.html 생성
 dist/index.html   완성본
 tests/            엔진 테스트, 화면 흐름 테스트

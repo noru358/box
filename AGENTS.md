@@ -27,8 +27,8 @@ Claude는 `CLAUDE.md`를 통해 이 파일을 읽는다. 규칙은 이 파일에
 한 내용은 한 파일에만 쓰고, 다른 곳에서는 링크한다.
 
 ## 코드 규칙
-- `src/engine.js`에는 규칙만 둔다. three.js, DOM, 화면 코드를 넣지 않는다. 그래야 node로 테스트할 수 있다.
-- 화면은 `src/game.html`. 엔진은 빌드 때 `/*ENGINE*/` 자리에 들어간다. `dist/index.html`을 직접 고치지 않는다.
+- `src/engine.js`·`src/ai.js`에는 규칙만 둔다. three.js, DOM, 화면 코드를 넣지 않는다. 그래야 node로 테스트할 수 있다.
+- 화면은 `src/view/*.js`(구조는 `docs/2-design/architecture.md`), 껍데기는 `src/game.html`. 빌드 때 `/*ENGINE*/`, `/*VIEW*/` 자리에 들어간다. `dist/index.html`을 직접 고치지 않는다.
 - 외부 스크립트는 three.js r128(CDN) 하나뿐이다.
 - 고친 뒤 반드시 `npm run check`. 실패하면 커밋하지 않는다.
 - 규칙이나 숫자를 바꾸면 해당 테스트(`tests/engine.test.cjs`)도 맞게 고친다.

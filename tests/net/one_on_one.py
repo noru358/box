@@ -51,9 +51,10 @@ async def main():
       al1=await H.evaluate('__box.net.al');sa=await S.evaluate(f'(()=>{{const b=__box.world.boxes.find(o=>o.id==={rid});return !!(b.alert)}})()')
       chk(al1==al0,f'{tag} 숨는 쪽 노랑 끝 넘어가기: 안 걸림 (그 순간 술래 화면 신호 {sl})')
       # 숨는 쪽 빨강 중 넘어가기: 걸리고 술래 화면에 ! 뜸
-      cy=await H.evaluate('__box.player.cy');await H.keyboard.press('ArrowDown' if cy<3 else 'ArrowUp');await asyncio.sleep(.8)
+      cy=await H.evaluate('__box.player.cy');tun=await H.evaluate('(()=>{const w=__box.world,p=__box.player,[x,y]=w.pos(p);return w.isTunnel(Math.round(x),Math.round(y))})()');await H.keyboard.press('ArrowDown' if cy<3 else 'ArrowUp');await asyncio.sleep(.8)
       al2=await H.evaluate('__box.net.al');alert=await S.evaluate(f'(()=>{{const b=__box.world.boxes.find(o=>o.id==={rid});return !!(b.alert)}})()')
-      chk(al2>al1 and alert,f'{tag} 빨강 중 넘어가기: 걸림, 술래 화면 ! 뜸 ({await H.evaluate("__box.world.light")})')
+      if tun: print('  (터널 안이라 빨강 중 넘어가도 안 걸리는 게 규칙 — 이번엔 빨강 시험 건너뜀)')
+      else: chk(al2>al1 and alert,f'{tag} 빨강 중 넘어가기: 걸림, 술래 화면 ! 뜸 ({await H.evaluate("__box.world.light")})')
       # 술래가 스캔으로 찾음 → 둘 다 끝
       await S.evaluate(f'__box.scan({rid})');await asyncio.sleep(1.5)
       chk(await S.evaluate('__box.over'),tag+' 술래 쪽도 끝: '+(await S.text_content('#panelBox'))[:20])

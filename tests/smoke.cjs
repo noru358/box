@@ -1,18 +1,10 @@
 // 완성본(dist/index.html)을 가짜 화면(3D와 DOM을 흉내 낸 빈 껍데기)에서 돌려,
-// 메뉴 → (맵 만들기 → 기록) → 숨는 쪽 한 판 → 찾는 쪽 한 판이 오류 없이 도는지 본다.
-// 기본은 지금 판(덜어낸 스위치 그대로). --full을 붙이면 FEAT 스위치를 전부 켠 판으로 돈다.
-// 그림이 제대로 나오는지, 손맛은 못 본다. 실행: node src/build.mjs && node tests/smoke.cjs [--full]
+// 메뉴 → 친구와 하기(방 없음) → 숨는 쪽 한 판 → 찾는 쪽 한 판이 오류 없이 도는지 본다.
+// 그림이 제대로 나오는지, 손맛은 못 본다. 실행: node src/build.mjs && node tests/smoke.cjs
 const fs = require('fs');
 const path = require('path');
-const full = process.argv.includes('--full');
 const file = process.argv.slice(2).find(a => !a.startsWith('--')) || path.join(__dirname, '../dist/index.html');
-let html = fs.readFileSync(file, 'utf8');
-if (full) {
-  const m = html.match(/const FEAT=\{[^}]*\}/);
-  if (!m) { console.log('FAIL FEAT 스위치를 못 찾음'); process.exit(1); }
-  html = html.replace(m[0], m[0].replace(/false/g, 'true'));
-}
-console.log(full ? '[스위치 다 켠 판]' : '[지금 판]');
+const html = fs.readFileSync(file, 'utf8');
 const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1]);
 
 function P(name = 'p') {
@@ -42,14 +34,7 @@ try {
   run(5, 16);
   ok(els.panelBox.innerHTML.includes('택배 숨바꼭질'), '메뉴가 뜬다');
 
-  if (full) {
-    els.bEdit.onclick(); run(10); els.editDone.onclick();
-    ok(els.panelBox.innerHTML.includes('공유 문자열'), '맵 만들기 → 공유 문자열 화면');
-    els.backEd.onclick(); run(5); els.editDone.onclick(); els.edMenu.onclick();
-    els.bRec.onclick(); ok(els.panelBox.innerHTML.includes('기록'), '기록 화면'); els.recBack.onclick();
-  } else {
-    ok(!els.panelBox.innerHTML.includes('bEdit') && !els.panelBox.innerHTML.includes('bRec') && (global.__box.FEAT.switch || !els.panelBox.innerHTML.includes('mapSel')), '덜어낸 판: 맵 만들기·기록이 메뉴에 없음(분기 갈래는 맵 선택 있음)');
-  }
+  ok(els.panelBox.innerHTML.includes('mapSel') && !els.panelBox.innerHTML.includes('bEdit'), '메뉴: 맵 선택 있음, 옛 맵 만들기 없음');
 
   // 친구와 하기: 실시간 방이 없는 곳(여기)에서는 눌러도 메뉴에 머문다
   if (els.bNet && els.bNet.onclick) { els.bNet.onclick(); run(5); ok(global.__box.mode === null && !global.__box.net, '친구와 하기: 방 없으면 메뉴 그대로'); }
@@ -86,8 +71,8 @@ try {
   // 기다리는 사이 직원에게 찍혀 판이 끝났을 수도 있다
   if (!global.__box.over) { els.pauseBtn.onclick(); els.quit.onclick(); } else els.toMenu.onclick();
 
-  els.bHide.onclick(); run(300); els.fakeBtn.onclick && els.fakeBtn.onclick(); run(3200);
-  ok(/도장/.test(els.goalL.innerHTML) || /통과|실패/.test(els.panelBox.innerHTML), '숨는 쪽 한 판(105초)이 끝까지 돈다');
+  els.bHide.onclick(); run(3500);
+  ok(/코인/.test(els.goalL.innerHTML) || /통과|실패/.test(els.panelBox.innerHTML), '숨는 쪽 한 판(105초)이 끝까지 돈다');
 
   {
     const H = global.__box.human;
