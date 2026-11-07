@@ -73,6 +73,7 @@ try {
 
   els.bHide.onclick(); run(3500);
   ok(/코인/.test(els.goalL.innerHTML) || /통과|실패/.test(els.panelBox.innerHTML), '숨는 쪽 한 판(105초)이 끝까지 돈다');
+  { const g = global.__box.player.got; ok(g === 0, `가만히 있는 숨는 쪽은 코인을 못 먹는다 (한 판 ${g}개)`); }
 
   {
     const H = global.__box.human;
@@ -87,6 +88,7 @@ try {
   ok(/찾음/.test(els.goalL.innerHTML) || /통과|실패/.test(els.panelBox.innerHTML), '찾는 쪽 한 판(105초)이 끝까지 돈다');
   {
     const bots = global.__box.bots;
+    console.log('     숨은 AI 코인: ' + bots.map(b => b.got).join(','));
     ok(bots.length === 3 && bots.every(b => Array.isArray(b.plan) && (b.src === 'synth' || b.src === 'human')), `숨은 셋이 창(초록마다 계획)으로 움직인다 (${bots.map(b => b.src).join(',')})`);
   }
 } catch (e) {

@@ -21,7 +21,10 @@ function clearStamps(){stampMeshes.forEach(g=>S.remove(g));stampMeshes=[];}
 // 공용 코인: 판에 POOL_N개. 아무나 어느 도장이든 찍을 수 있고, 각자 같은 도장은 한 번만. 찍어도 사라지지 않는다(사라지면 찍은 상자가 들통나서).
 // 도장마다 수명 STAMP_LIFE초, 다 되면 다른 곳에 새로. 내가 먹은 코인은 내 화면에서만 지운다(loop.js).
 const POOL_N=4;let pool=[],poolId=0;
-function poolNew(){const used=pool.map(s=>[s.x,s.y]);const c=[];for(let y=0;y<world.H;y++)for(let x=2;x<world.W-2;x++){const t=world.T(x,y);if(!t||t.t!=='belt'||t.tun)continue;if(used.some(([ux,uy])=>Math.abs(ux-x)<=1&&Math.abs(uy-y)<=1))continue;c.push([x,y]);}
+// 숨은 상자가 옆으로 안 넘어가고 실려만 가면 지나갈 칸들(출고구까지). 새 코인은 여기에 안 놓는다(가만히 있어도 코인을 먹던 문제)
+function railAhead(b,out){if(!b||b.gone||b.pending||b.found)return;let x=b.cx,y=b.cy;for(let i=0;i<world.W+world.H;i++){const t=world.T(x,y);if(!t||t.t==='exit')break;out.add(x+','+y);x+=DX[t.d];y+=DY[t.d];}}
+const hiders=()=>mode==='hide'?[player]:bots;
+function poolNew(){const used=pool.map(s=>[s.x,s.y]),ahead=new Set();hiders().forEach(b=>railAhead(b,ahead));const c=[];for(let y=0;y<world.H;y++)for(let x=2;x<world.W-2;x++){const t=world.T(x,y);if(!t||t.t!=='belt'||t.tun||ahead.has(x+','+y))continue;if(used.some(([ux,uy])=>Math.abs(ux-x)<=1&&Math.abs(uy-y)<=1))continue;c.push([x,y]);}
   const free=c.filter(([x,y])=>!used.some(([,uy])=>uy===y));const src=free.length?free:c;if(!src.length)return null;const [x,y]=src[(Math.random()*src.length)|0];
   const s={id:++poolId,x,y,t:STAMP_LIFE*(.7+Math.random()*.3),mesh:stampMesh()};s.mesh.position.set(wx(x),0,wz(y));return s;}
 function poolInit(){pool=[];for(let i=0;i<POOL_N;i++){const s=poolNew();if(s)pool.push(s);}}
@@ -35,6 +38,10 @@ function placeStamp(b){b.took=b.took||new Set();poolAim(b);}
 const alertTex=(()=>{const c=document.createElement('canvas');c.width=64;c.height=96;const g=c.getContext('2d');g.fillStyle='#d6322a';g.beginPath();g.arc(32,40,30,0,Math.PI*2);g.fill();g.fillStyle='#fff';g.font='bold 52px sans-serif';g.textAlign='center';g.textBaseline='middle';g.fillText('!',32,42);return new THREE.CanvasTexture(c);})();
 const alertMat=new THREE.SpriteMaterial({map:alertTex,depthTest:false});
 function alertOn(b){const m=meshes.get(b);if(!m||m.alert)return;const s=new THREE.Sprite(alertMat);s.scale.set(1.3,1.95,1);s.position.y=b.size*.8+2.4;m.g.add(s);m.alert=s;}
+// 찾는 쪽에서 스캔해 '그냥 상자'로 확인한 상자: 회색 X를 계속 띄운다(출고돼 새 상자로 나오면 지움)
+const clearedMat=new THREE.SpriteMaterial({map:(()=>{const c=document.createElement('canvas');c.width=64;c.height=64;const g=c.getContext('2d');g.fillStyle='#5f5a50';g.beginPath();g.arc(32,32,28,0,Math.PI*2);g.fill();g.strokeStyle='#fff';g.lineWidth=8;g.beginPath();g.moveTo(20,20);g.lineTo(44,44);g.moveTo(44,20);g.lineTo(20,44);g.stroke();return new THREE.CanvasTexture(c);})(),depthTest:false});
+function clearedOn(b){const m=meshes.get(b);b.cleared=true;if(!m||m.clr)return;const s=new THREE.Sprite(clearedMat);s.scale.set(1.1,1.1,1);s.position.y=b.size*.8+1.3;m.g.add(s);m.clr=s;}
+function clearedOff(b){b.cleared=false;const m=meshes.get(b);if(m&&m.clr){m.g.remove(m.clr);m.clr=null;}}
 function alertsOff(){meshes.forEach(m=>{if(m.alert){m.g.remove(m.alert);m.alert=null;}});}
 // 표시
 function arrowShape(s){const sh=new THREE.Shape();sh.moveTo(-.35*s,1.6*s);sh.lineTo(.35*s,1.6*s);sh.lineTo(.35*s,.7*s);sh.lineTo(.85*s,.7*s);sh.lineTo(0,-.2*s);sh.lineTo(-.85*s,.7*s);sh.lineTo(-.35*s,.7*s);sh.closePath();return new THREE.ShapeGeometry(sh);}

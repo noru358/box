@@ -43,7 +43,7 @@ function setRay(e){const r=cv.getBoundingClientRect();ndc.set(((e.clientX-r.left
 const pickPlane=new THREE.Plane(new THREE.Vector3(0,1,0),-1),pp=new THREE.Vector3();
 // 화면에 보이는 위치가 터널 덮개 아래인가(안 보임, 못 집음)
 const inTun=b=>inTunnel(world,b);
-function pickBox(e,r){setRay(e);if(!ray.ray.intersectPlane(pickPlane,pp))return null;let best=null,bd=r||CS*.8;world.boxes.forEach(b=>{if(b.found||b.gone||b.pending||inTun(b))return;const [x,y]=world.pos(b);const d=Math.hypot(wx(x)-pp.x,wz(y)-pp.z);if(d<bd){bd=d;best=b;}});return best;}
+function pickBox(e,r){setRay(e);if(!ray.ray.intersectPlane(pickPlane,pp))return null;let best=null,bd=r||CS*.8;world.boxes.forEach(b=>{if(b.found||b.cleared||b.gone||b.pending||inTun(b))return;const [x,y]=world.pos(b);const d=Math.hypot(wx(x)-pp.x,wz(y)-pp.z);if(d<bd){bd=d;best=b;}});return best;}
 const hoverRing=new THREE.Mesh(new THREE.RingGeometry(1.25,1.6,28),B('#f2c230'));hoverRing.rotation.x=-Math.PI/2;hoverRing.visible=false;S.add(hoverRing);
 // 마우스: 올려 둔 상자가 노란 고리, 클릭 = 스캔. 터치: 한 번 누르면 고리(선택), 같은 상자를 한 번 더 누르면 스캔(손가락에 가려 엉뚱한 상자를 찍지 않게)
 let lastPtr='mouse';cv.addEventListener('pointerdown',e=>{lastPtr=e.pointerType||'mouse';});
@@ -53,7 +53,7 @@ cv.addEventListener('click',e=>{if(mode!=='seek'||over||paused)return;const touc
   if(touch){if(!b){hover=null;return;}if(hover!==b){hover=b;say('한 번 더 누르면 스캔',.8);return;}hover=null;}
   if(b)scanBox(b);});
 function scanBox(b){scans--;
-  if(b.kind==='bot'){b.found=true;b.kind='npc';found++;meshes.get(b).body.material=redMat;say('사람이다! 삐빅');}else{time-=5;say('그냥 상자… −5초');}checkSeekEnd();updHud();}
+  if(b.kind==='bot'){b.found=true;b.kind='npc';found++;meshes.get(b).body.material=redMat;say('사람이다! 삐빅');}else{time-=5;clearedOn(b);say('그냥 상자… −5초');}checkSeekEnd();updHud();}
 cv.addEventListener('contextmenu',e=>e.preventDefault()); // 길게 누르기 메뉴 막기
 function checkSeekEnd(){if(over)return;if(found+escaped>=bots.length)end(found===bots.length,`찾음 ${found}, 놓침 ${escaped}. 남은 시간 ${Math.ceil(time)}초, 스캔 ${scans}번 남김.`);
   else if(scans<=0)end(false,`스캔을 다 씀. 찾음 ${found}, 놓침 ${escaped}.`);}

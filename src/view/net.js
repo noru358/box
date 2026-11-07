@@ -50,7 +50,7 @@ function netPeers(peers){if(!net)return;const o=otherOf(peers),P=o?o.presence:nu
   if(P.ph==='play'&&P.ep!==net.ep&&P.snap){const a=(P.as||[]).find(x=>x[0]===myPeer());if(a&&idle){net.ep=P.ep;startRemote(P.map,a[1],P.snap);}return;}
   if(P.ep!==net.ep||mode!=='hide')return;
   if(P.ph==='play'&&P.snap)applySnap(P.snap);
-  else if(P.ph==='end'&&!over){if(P.snap)applySnap(P.snap);if(!over)end(false,'판 끝. '+(P.res||''));}
+  else if(P.ph==='end'&&!over){if(P.snap)applySnap(P.snap);if(!over)end(!P.win,(P.win?'술래가 찾았다. ':'끝까지 안 들켰다. ')+(P.res||''));} // 숨는 쪽 결과 = 술래 결과의 반대
   else if(P.ph==='lobby'&&!over)end(false,'술래가 판을 끝냈어요.');}
 function startRemote(mapKey,id,snap){goFull();initSound();if(mapList().some(m=>m.k===mapKey))curKey=mapKey;mode='hide';over=false;paused=false;
   world=createWorld(curEntry().str,Object.assign(wopt(),{puppet:true}));buildTiles(world.tiles);clearMeshes();fitCam();clearStamps();pool=[];
@@ -61,7 +61,10 @@ function startRemote(mapKey,id,snap){goFull();initSound();if(mapList().some(m=>m
 function applySnap(s){if(!world||!world.puppet||!player)return;time=s.t;net.frozen=!!s.pz;
   // 신호: 노랑은 받은 순간 켜고 빨강은 내 시계로(frame). 내가 이미 빨강이면 늦게 온 노랑은 무시
   if(s.L==='green'&&world.light!=='green')world.setLight('green');else if(s.L==='yellow'&&world.light==='green')world.setLight('yellow');else if(s.L==='red'&&world.light!=='red')world.setLight('red');
+  // 덮어쓰기 전 화면 위치를 기억했다가, 0.8칸 안으로 튀면(출고 뒤 다시 나오는 건 그대로 순간 이동) 그 차이를 그리는 위치에서만 0.12초에 걸쳐 메운다(loop.js b.vo). 버벅임 원인이었음
+  const before=new Map();world.boxes.forEach(b=>{if(!b.gone&&!b.pending){const [x,y]=world.pos(b);before.set(b,[x+(b.vo?b.vo[0]:0),y+(b.vo?b.vo[1]:0)]);}});
   world.loadBoxes(s.bx,b=>b===player&&performance.now()-net.hopAt<700); // 방금 내가 넘어간 건 술래 화면에 닿을 때까지 내 화면 그대로
+  before.forEach((p,b)=>{if(b.gone||b.pending){b.vo=null;return;}const [x,y]=world.pos(b),dx=p[0]-x,dy=p[1]-y;b.vo=Math.hypot(dx,dy)<.8?[dx,dy]:null;});
   world.boxes.forEach(b=>{const m=meshFor(b);if(b.alert)alertOn(b);if(b.found&&!m.red){m.red=1;m.body.material=redMat;}});
   const ids=new Set(s.po.map(a=>a[0]));pool=pool.filter(c=>{if(ids.has(c.id))return true;S.remove(c.mesh);stampMeshes=stampMeshes.filter(g=>g!==c.mesh);return false;});
   for(const [id,x,y,t] of s.po){let c=pool.find(o=>o.id===id);if(!c){c={id,x,y,t,mesh:stampMesh()};pool.push(c);}c.x=x;c.y=y;c.t=t;c.mesh.position.set(wx(x),0,wz(y));}

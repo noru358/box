@@ -21,9 +21,9 @@ function playUi(m,label){$('panel').hidden=true;$('susWrap').hidden=m!=='hide';$
 function start(m){goFull();initSound();mode=m;over=false;paused=false;newWorld();fitCam();
   goal=STAMPS;time=GAME_TIME;scans=6;found=0;escaped=0;sig=signalAI(DIFF[DIFF_KEY]);world.setLight('green');t0=performance.now();clearStamps();
   hunt={t:2,target:null,aim:0,scans:15,stun:0};bots=[];hideMarks();player=null;rec=m==='hide'?{wins:[],cur:null,ps:world.t}:null;
-  poolInit();
-  if(m==='hide'){player=world.add('player')||world.boxes[0];player.kind='player';player.got=0;placeStamp(player);recLight('green');[meArrow,worker].forEach(o=>o.visible=true);}
-  else{const pers=['rush','careful','mimic'];for(let i=0;i<3;i++){const b=world.boxes[i];b.kind='bot';b.pers=pers[i];b.got=0;placeStamp(b);bots.push(b);}}
+  if(m==='hide'){player=world.add('player')||world.boxes[0];player.kind='player';player.got=0;player.mustHop=true;recLight('green');[meArrow,worker].forEach(o=>o.visible=true);}
+  else{const pers=['rush','careful','mimic'];for(let i=0;i<3;i++){const b=world.boxes[i];b.kind='bot';b.pers=pers[i];b.got=0;b.mustHop=true;bots.push(b);}}
+  poolInit();hiders().forEach(placeStamp); // 코인은 숨은 상자를 만든 뒤에 놓는다(처음부터 실려 가는 길에 놓이지 않게)
   playUi(m,(m==='hide'?'<b>숨는 쪽</b>':'<b>찾는 쪽</b>')+` · ${curEntry().name}`);}
 // 메뉴판에서 판 화면 요소를 다 숨긴다(메뉴·친구와 하기 방 공용)
 function idleUi(label){mode=null;over=true;paused=false;hideMarks();touchUi(null);clearStamps();['hideTools','seekTools','pauseBtn','susWrap','timeWrap'].forEach(id=>$(id).hidden=true);$('goalL').textContent='';$('modeL').innerHTML=label;$('panel').hidden=false;}

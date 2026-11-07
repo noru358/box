@@ -102,7 +102,7 @@ button{touch-action:manipulation}
     <button id="lookBtn">돌아보기 (Space)</button>
     <span class="note">상자를 클릭하면 스캔(사람이면 찾음, 아니면 −5초)</span>
   </div>
-  <p class="note" id="ver">v13.3 · 친구와 1:1 · 분기 칸 · 터널 · 공용 코인 4개 · 판 90초</p>
+  <p class="note" id="ver">v13.4 · 친구와 1:1 · 분기 칸 · 터널 · 공용 코인 4개 · 판 90초</p>
 </div>
 
 
@@ -399,7 +399,10 @@ function clearStamps(){stampMeshes.forEach(g=>S.remove(g));stampMeshes=[];}
 // 공용 코인: 판에 POOL_N개. 아무나 어느 도장이든 찍을 수 있고, 각자 같은 도장은 한 번만. 찍어도 사라지지 않는다(사라지면 찍은 상자가 들통나서).
 // 도장마다 수명 STAMP_LIFE초, 다 되면 다른 곳에 새로. 내가 먹은 코인은 내 화면에서만 지운다(loop.js).
 const POOL_N=4;let pool=[],poolId=0;
-function poolNew(){const used=pool.map(s=>[s.x,s.y]);const c=[];for(let y=0;y<world.H;y++)for(let x=2;x<world.W-2;x++){const t=world.T(x,y);if(!t||t.t!=='belt'||t.tun)continue;if(used.some(([ux,uy])=>Math.abs(ux-x)<=1&&Math.abs(uy-y)<=1))continue;c.push([x,y]);}
+// 숨은 상자가 옆으로 안 넘어가고 실려만 가면 지나갈 칸들(출고구까지). 새 코인은 여기에 안 놓는다(가만히 있어도 코인을 먹던 문제)
+function railAhead(b,out){if(!b||b.gone||b.pending||b.found)return;let x=b.cx,y=b.cy;for(let i=0;i<world.W+world.H;i++){const t=world.T(x,y);if(!t||t.t==='exit')break;out.add(x+','+y);x+=DX[t.d];y+=DY[t.d];}}
+const hiders=()=>mode==='hide'?[player]:bots;
+function poolNew(){const used=pool.map(s=>[s.x,s.y]),ahead=new Set();hiders().forEach(b=>railAhead(b,ahead));const c=[];for(let y=0;y<world.H;y++)for(let x=2;x<world.W-2;x++){const t=world.T(x,y);if(!t||t.t!=='belt'||t.tun||ahead.has(x+','+y))continue;if(used.some(([ux,uy])=>Math.abs(ux-x)<=1&&Math.abs(uy-y)<=1))continue;c.push([x,y]);}
   const free=c.filter(([x,y])=>!used.some(([,uy])=>uy===y));const src=free.length?free:c;if(!src.length)return null;const [x,y]=src[(Math.random()*src.length)|0];
   const s={id:++poolId,x,y,t:STAMP_LIFE*(.7+Math.random()*.3),mesh:stampMesh()};s.mesh.position.set(wx(x),0,wz(y));return s;}
 function poolInit(){pool=[];for(let i=0;i<POOL_N;i++){const s=poolNew();if(s)pool.push(s);}}
@@ -413,6 +416,10 @@ function placeStamp(b){b.took=b.took||new Set();poolAim(b);}
 const alertTex=(()=>{const c=document.createElement('canvas');c.width=64;c.height=96;const g=c.getContext('2d');g.fillStyle='#d6322a';g.beginPath();g.arc(32,40,30,0,Math.PI*2);g.fill();g.fillStyle='#fff';g.font='bold 52px sans-serif';g.textAlign='center';g.textBaseline='middle';g.fillText('!',32,42);return new THREE.CanvasTexture(c);})();
 const alertMat=new THREE.SpriteMaterial({map:alertTex,depthTest:false});
 function alertOn(b){const m=meshes.get(b);if(!m||m.alert)return;const s=new THREE.Sprite(alertMat);s.scale.set(1.3,1.95,1);s.position.y=b.size*.8+2.4;m.g.add(s);m.alert=s;}
+// 찾는 쪽에서 스캔해 '그냥 상자'로 확인한 상자: 회색 X를 계속 띄운다(출고돼 새 상자로 나오면 지움)
+const clearedMat=new THREE.SpriteMaterial({map:(()=>{const c=document.createElement('canvas');c.width=64;c.height=64;const g=c.getContext('2d');g.fillStyle='#5f5a50';g.beginPath();g.arc(32,32,28,0,Math.PI*2);g.fill();g.strokeStyle='#fff';g.lineWidth=8;g.beginPath();g.moveTo(20,20);g.lineTo(44,44);g.moveTo(44,20);g.lineTo(20,44);g.stroke();return new THREE.CanvasTexture(c);})(),depthTest:false});
+function clearedOn(b){const m=meshes.get(b);b.cleared=true;if(!m||m.clr)return;const s=new THREE.Sprite(clearedMat);s.scale.set(1.1,1.1,1);s.position.y=b.size*.8+1.3;m.g.add(s);m.clr=s;}
+function clearedOff(b){b.cleared=false;const m=meshes.get(b);if(m&&m.clr){m.g.remove(m.clr);m.clr=null;}}
 function alertsOff(){meshes.forEach(m=>{if(m.alert){m.g.remove(m.alert);m.alert=null;}});}
 // 표시
 function arrowShape(s){const sh=new THREE.Shape();sh.moveTo(-.35*s,1.6*s);sh.lineTo(.35*s,1.6*s);sh.lineTo(.35*s,.7*s);sh.lineTo(.85*s,.7*s);sh.lineTo(0,-.2*s);sh.lineTo(-.85*s,.7*s);sh.lineTo(-.35*s,.7*s);sh.closePath();return new THREE.ShapeGeometry(sh);}
@@ -448,9 +455,9 @@ function playUi(m,label){$('panel').hidden=true;$('susWrap').hidden=m!=='hide';$
 function start(m){goFull();initSound();mode=m;over=false;paused=false;newWorld();fitCam();
   goal=STAMPS;time=GAME_TIME;scans=6;found=0;escaped=0;sig=signalAI(DIFF[DIFF_KEY]);world.setLight('green');t0=performance.now();clearStamps();
   hunt={t:2,target:null,aim:0,scans:15,stun:0};bots=[];hideMarks();player=null;rec=m==='hide'?{wins:[],cur:null,ps:world.t}:null;
-  poolInit();
-  if(m==='hide'){player=world.add('player')||world.boxes[0];player.kind='player';player.got=0;placeStamp(player);recLight('green');[meArrow,worker].forEach(o=>o.visible=true);}
-  else{const pers=['rush','careful','mimic'];for(let i=0;i<3;i++){const b=world.boxes[i];b.kind='bot';b.pers=pers[i];b.got=0;placeStamp(b);bots.push(b);}}
+  if(m==='hide'){player=world.add('player')||world.boxes[0];player.kind='player';player.got=0;player.mustHop=true;recLight('green');[meArrow,worker].forEach(o=>o.visible=true);}
+  else{const pers=['rush','careful','mimic'];for(let i=0;i<3;i++){const b=world.boxes[i];b.kind='bot';b.pers=pers[i];b.got=0;b.mustHop=true;bots.push(b);}}
+  poolInit();hiders().forEach(placeStamp); // 코인은 숨은 상자를 만든 뒤에 놓는다(처음부터 실려 가는 길에 놓이지 않게)
   playUi(m,(m==='hide'?'<b>숨는 쪽</b>':'<b>찾는 쪽</b>')+` · ${curEntry().name}`);}
 // 메뉴판에서 판 화면 요소를 다 숨긴다(메뉴·친구와 하기 방 공용)
 function idleUi(label){mode=null;over=true;paused=false;hideMarks();touchUi(null);clearStamps();['hideTools','seekTools','pauseBtn','susWrap','timeWrap'].forEach(id=>$(id).hidden=true);$('goalL').textContent='';$('modeL').innerHTML=label;$('panel').hidden=false;}
@@ -529,7 +536,7 @@ function setRay(e){const r=cv.getBoundingClientRect();ndc.set(((e.clientX-r.left
 const pickPlane=new THREE.Plane(new THREE.Vector3(0,1,0),-1),pp=new THREE.Vector3();
 // 화면에 보이는 위치가 터널 덮개 아래인가(안 보임, 못 집음)
 const inTun=b=>inTunnel(world,b);
-function pickBox(e,r){setRay(e);if(!ray.ray.intersectPlane(pickPlane,pp))return null;let best=null,bd=r||CS*.8;world.boxes.forEach(b=>{if(b.found||b.gone||b.pending||inTun(b))return;const [x,y]=world.pos(b);const d=Math.hypot(wx(x)-pp.x,wz(y)-pp.z);if(d<bd){bd=d;best=b;}});return best;}
+function pickBox(e,r){setRay(e);if(!ray.ray.intersectPlane(pickPlane,pp))return null;let best=null,bd=r||CS*.8;world.boxes.forEach(b=>{if(b.found||b.cleared||b.gone||b.pending||inTun(b))return;const [x,y]=world.pos(b);const d=Math.hypot(wx(x)-pp.x,wz(y)-pp.z);if(d<bd){bd=d;best=b;}});return best;}
 const hoverRing=new THREE.Mesh(new THREE.RingGeometry(1.25,1.6,28),B('#f2c230'));hoverRing.rotation.x=-Math.PI/2;hoverRing.visible=false;S.add(hoverRing);
 // 마우스: 올려 둔 상자가 노란 고리, 클릭 = 스캔. 터치: 한 번 누르면 고리(선택), 같은 상자를 한 번 더 누르면 스캔(손가락에 가려 엉뚱한 상자를 찍지 않게)
 let lastPtr='mouse';cv.addEventListener('pointerdown',e=>{lastPtr=e.pointerType||'mouse';});
@@ -539,7 +546,7 @@ cv.addEventListener('click',e=>{if(mode!=='seek'||over||paused)return;const touc
   if(touch){if(!b){hover=null;return;}if(hover!==b){hover=b;say('한 번 더 누르면 스캔',.8);return;}hover=null;}
   if(b)scanBox(b);});
 function scanBox(b){scans--;
-  if(b.kind==='bot'){b.found=true;b.kind='npc';found++;meshes.get(b).body.material=redMat;say('사람이다! 삐빅');}else{time-=5;say('그냥 상자… −5초');}checkSeekEnd();updHud();}
+  if(b.kind==='bot'){b.found=true;b.kind='npc';found++;meshes.get(b).body.material=redMat;say('사람이다! 삐빅');}else{time-=5;clearedOn(b);say('그냥 상자… −5초');}checkSeekEnd();updHud();}
 cv.addEventListener('contextmenu',e=>e.preventDefault()); // 길게 누르기 메뉴 막기
 function checkSeekEnd(){if(over)return;if(found+escaped>=bots.length)end(found===bots.length,`찾음 ${found}, 놓침 ${escaped}. 남은 시간 ${Math.ceil(time)}초, 스캔 ${scans}번 남김.`);
   else if(scans<=0)end(false,`스캔을 다 씀. 찾음 ${found}, 놓침 ${escaped}.`);}
@@ -634,7 +641,7 @@ function netPeers(peers){if(!net)return;const o=otherOf(peers),P=o?o.presence:nu
   if(P.ph==='play'&&P.ep!==net.ep&&P.snap){const a=(P.as||[]).find(x=>x[0]===myPeer());if(a&&idle){net.ep=P.ep;startRemote(P.map,a[1],P.snap);}return;}
   if(P.ep!==net.ep||mode!=='hide')return;
   if(P.ph==='play'&&P.snap)applySnap(P.snap);
-  else if(P.ph==='end'&&!over){if(P.snap)applySnap(P.snap);if(!over)end(false,'판 끝. '+(P.res||''));}
+  else if(P.ph==='end'&&!over){if(P.snap)applySnap(P.snap);if(!over)end(!P.win,(P.win?'술래가 찾았다. ':'끝까지 안 들켰다. ')+(P.res||''));} // 숨는 쪽 결과 = 술래 결과의 반대
   else if(P.ph==='lobby'&&!over)end(false,'술래가 판을 끝냈어요.');}
 function startRemote(mapKey,id,snap){goFull();initSound();if(mapList().some(m=>m.k===mapKey))curKey=mapKey;mode='hide';over=false;paused=false;
   world=createWorld(curEntry().str,Object.assign(wopt(),{puppet:true}));buildTiles(world.tiles);clearMeshes();fitCam();clearStamps();pool=[];
@@ -645,7 +652,10 @@ function startRemote(mapKey,id,snap){goFull();initSound();if(mapList().some(m=>m
 function applySnap(s){if(!world||!world.puppet||!player)return;time=s.t;net.frozen=!!s.pz;
   // 신호: 노랑은 받은 순간 켜고 빨강은 내 시계로(frame). 내가 이미 빨강이면 늦게 온 노랑은 무시
   if(s.L==='green'&&world.light!=='green')world.setLight('green');else if(s.L==='yellow'&&world.light==='green')world.setLight('yellow');else if(s.L==='red'&&world.light!=='red')world.setLight('red');
+  // 덮어쓰기 전 화면 위치를 기억했다가, 0.8칸 안으로 튀면(출고 뒤 다시 나오는 건 그대로 순간 이동) 그 차이를 그리는 위치에서만 0.12초에 걸쳐 메운다(loop.js b.vo). 버벅임 원인이었음
+  const before=new Map();world.boxes.forEach(b=>{if(!b.gone&&!b.pending){const [x,y]=world.pos(b);before.set(b,[x+(b.vo?b.vo[0]:0),y+(b.vo?b.vo[1]:0)]);}});
   world.loadBoxes(s.bx,b=>b===player&&performance.now()-net.hopAt<700); // 방금 내가 넘어간 건 술래 화면에 닿을 때까지 내 화면 그대로
+  before.forEach((p,b)=>{if(b.gone||b.pending){b.vo=null;return;}const [x,y]=world.pos(b),dx=p[0]-x,dy=p[1]-y;b.vo=Math.hypot(dx,dy)<.8?[dx,dy]:null;});
   world.boxes.forEach(b=>{const m=meshFor(b);if(b.alert)alertOn(b);if(b.found&&!m.red){m.red=1;m.body.material=redMat;}});
   const ids=new Set(s.po.map(a=>a[0]));pool=pool.filter(c=>{if(ids.has(c.id))return true;S.remove(c.mesh);stampMeshes=stampMeshes.filter(g=>g!==c.mesh);return false;});
   for(const [id,x,y,t] of s.po){let c=pool.find(o=>o.id===id);if(!c){c={id,x,y,t,mesh:stampMesh()};pool.push(c);}c.x=x;c.y=y;c.t=t;c.mesh.position.set(wx(x),0,wz(y));}
@@ -673,15 +683,16 @@ function frame(now){const dt=Math.min(.05,(now-last)/1000);last=now;const cl=!!(
     // 코인 수명: 다 되면 다른 곳으로 옮겨 간다(존버 방지). 먹으면 got+1, 4개면 숨는 쪽 승리 / 숨은 AI는 빠져나감
     if(live&&!over&&!cl){pool.forEach((s,i)=>{s.t-=dt;if(s.t<=0){const n=poolNew();if(n){S.remove(s.mesh);stampMeshes=stampMeshes.filter(g=>g!==s.mesh);pool[i]=n;}else s.t=STAMP_LIFE;}}); // 빈 자리가 없으면 그 코인을 그대로 둔다
       (mode==='hide'?[player]:bots).forEach(b=>{if(!b||b.gone||b.found||b.pending||over)return;b.took=b.took||new Set();
-        for(const s of pool){if(b.took.has(s.id)||!onStamp(world,b,[s.x,s.y]))continue;b.took.add(s.id);b.got++;
+        for(const s of pool){if(b.took.has(s.id)||!onStamp(world,b,[s.x,s.y]))continue;if(b.mustHop){if(b===player&&!b.toldHop){b.toldHop=1;say('한 번 옆으로 넘어가야 코인을 먹어요',1.6);}continue;}b.took.add(s.id);b.got++;
           if(b===player){say(`코인 ${b.got}/${goal}`);if(b.got>=goal){end(true,`${Math.round((performance.now()-t0)/1000)}초 만에 코인 ${goal}개, 직원 스캔 ${hunt.scans}번 남음.`);return;}}
           else if(b.got>=goal){b.gone=true;escaped++;say('누군가 코인을 다 모으고 빠져나갔다…');checkSeekEnd();return;}}
         if(!b.gone)poolAim(b);});}
     world.step(dt);
     world.events.forEach(ev=>{
       if(cl&&live&&ev.b===player&&(ev.type==='frozen'||(ev.type==='thud'&&ev.off)))netAlert(); // 친구와 하기: 걸림은 숨는 쪽 화면이 정해서 알린다
+      if(ev.type==='thud')ev.b.mustHop=false; // 옆으로 넘어가면 코인을 먹을 수 있다
       if(ev.type==='thud'){const m=meshes.get(ev.b);if(m)m.bump=.3;if(ev.off&&!ev.b.remote)alertOn(ev.b);if(live&&mode==='hide'&&ev.off)sus(ev.b,3.6);if(live&&mode==='hide'&&world.hasSwitches&&!ev.off&&!ev.sw&&!ev.tun)sus(ev.b,1.6);}
-      if(ev.type==='deliver'&&ev.b.kind==='npc')ev.b.pat=newPat(); // 출고된 일반 상자는 새 상자로 다시 나온다
+      if(ev.type==='deliver'){if(ev.b.kind==='npc'){ev.b.pat=newPat();clearedOff(ev.b);}else{ev.b.mustHop=true;ev.b.toldHop=0;}} // 출고된 일반 상자는 새 상자로(무늬·확인 표시 새로). 숨은 상자는 다시 나온 줄에서 한 번 넘어가야 코인
       if(ev.type==='frozen'){if(!ev.b.remote)alertOn(ev.b);if(live&&mode==='hide'){sus(ev.b,3.2);if(ev.b===player)say('넘어가다 걸렸다!',1.2);}}
       if(ev.type==='light'){if(live)lightSound(ev.s);if(ev.s==='green')alertsOff();if(live&&mode==='hide')recLight(ev.s);if(live&&mode==='seek'&&ev.s==='green'){const ctx=aiCtx();bots.forEach(b=>{if(!b.found&&!b.gone&&!b.remote)botPlan(world,b,ctx);});}}});
     {const on=live&&world.light==='red';stage.classList.toggle('red',on);$('redTag').hidden=!on;if(on)$('redTag').textContent=mode==='seek'?`보는 중 ${Math.max(0,2.5-world.lightT).toFixed(1)}초 · 지금 옆으로 가는 상자는 !`:'직원이 보는 중';}
@@ -689,7 +700,7 @@ function frame(now){const dt=Math.min(.05,(now-last)/1000);last=now;const cl=!!(
     world.events=[];
 
     world.boxes.forEach(b=>{const m=meshFor(b);if(b.gone||b.pending||inTun(b)){m.g.visible=false;return;}m.g.visible=true;
-      const [x,y]=world.pos(b);let h=0;if(m.bump>0){m.bump-=dt;h=Math.abs(Math.sin(m.bump*30))*.15;}m.g.position.set(wx(x),h,wz(y));});
+      let [x,y]=world.pos(b);if(b.vo){x+=b.vo[0];y+=b.vo[1];const k=Math.exp(-dt/.12);b.vo[0]*=k;b.vo[1]*=k;if(Math.abs(b.vo[0])+Math.abs(b.vo[1])<.01)b.vo=null;}let h=0;if(m.bump>0){m.bump-=dt;h=Math.abs(Math.sin(m.bump*30))*.15;}m.g.position.set(wx(x),h,wz(y));});
     stampMeshes.forEach((g,i)=>{const c=g.userData.coin;c.quaternion.copy(cam.quaternion).multiply(coinQ);c.scale.x=.25+.75*Math.abs(Math.cos(now/260+i));c.position.y=2.6+.25*Math.sin(now/300+i);}); // 동전 면이 늘 카메라를 보고, 가로로 좁아졌다 넓어지며 도는 것처럼
     pool.forEach(s=>{const f=Math.max(0,s.t/STAMP_LIFE),r=s.mesh.children[0],c=s.mesh.userData.coin,mine=mode==='hide'&&player&&player.took&&player.took.has(s.id);
       s.mesh.visible=!mine;r.scale.setScalar(.35+.65*f);c.visible=!(s.t<3&&Math.floor(now/120)%2);}); // 고리가 줄어들고, 3초 남으면 동전이 깜빡. 내가 먹은 건 내 화면에서만 지운다(남들 화면엔 그대로라 들통나지 않음)

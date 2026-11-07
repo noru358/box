@@ -15,15 +15,16 @@ function frame(now){const dt=Math.min(.05,(now-last)/1000);last=now;const cl=!!(
     // 코인 수명: 다 되면 다른 곳으로 옮겨 간다(존버 방지). 먹으면 got+1, 4개면 숨는 쪽 승리 / 숨은 AI는 빠져나감
     if(live&&!over&&!cl){pool.forEach((s,i)=>{s.t-=dt;if(s.t<=0){const n=poolNew();if(n){S.remove(s.mesh);stampMeshes=stampMeshes.filter(g=>g!==s.mesh);pool[i]=n;}else s.t=STAMP_LIFE;}}); // 빈 자리가 없으면 그 코인을 그대로 둔다
       (mode==='hide'?[player]:bots).forEach(b=>{if(!b||b.gone||b.found||b.pending||over)return;b.took=b.took||new Set();
-        for(const s of pool){if(b.took.has(s.id)||!onStamp(world,b,[s.x,s.y]))continue;b.took.add(s.id);b.got++;
+        for(const s of pool){if(b.took.has(s.id)||!onStamp(world,b,[s.x,s.y]))continue;if(b.mustHop){if(b===player&&!b.toldHop){b.toldHop=1;say('한 번 옆으로 넘어가야 코인을 먹어요',1.6);}continue;}b.took.add(s.id);b.got++;
           if(b===player){say(`코인 ${b.got}/${goal}`);if(b.got>=goal){end(true,`${Math.round((performance.now()-t0)/1000)}초 만에 코인 ${goal}개, 직원 스캔 ${hunt.scans}번 남음.`);return;}}
           else if(b.got>=goal){b.gone=true;escaped++;say('누군가 코인을 다 모으고 빠져나갔다…');checkSeekEnd();return;}}
         if(!b.gone)poolAim(b);});}
     world.step(dt);
     world.events.forEach(ev=>{
       if(cl&&live&&ev.b===player&&(ev.type==='frozen'||(ev.type==='thud'&&ev.off)))netAlert(); // 친구와 하기: 걸림은 숨는 쪽 화면이 정해서 알린다
+      if(ev.type==='thud')ev.b.mustHop=false; // 옆으로 넘어가면 코인을 먹을 수 있다
       if(ev.type==='thud'){const m=meshes.get(ev.b);if(m)m.bump=.3;if(ev.off&&!ev.b.remote)alertOn(ev.b);if(live&&mode==='hide'&&ev.off)sus(ev.b,3.6);if(live&&mode==='hide'&&world.hasSwitches&&!ev.off&&!ev.sw&&!ev.tun)sus(ev.b,1.6);}
-      if(ev.type==='deliver'&&ev.b.kind==='npc')ev.b.pat=newPat(); // 출고된 일반 상자는 새 상자로 다시 나온다
+      if(ev.type==='deliver'){if(ev.b.kind==='npc'){ev.b.pat=newPat();clearedOff(ev.b);}else{ev.b.mustHop=true;ev.b.toldHop=0;}} // 출고된 일반 상자는 새 상자로(무늬·확인 표시 새로). 숨은 상자는 다시 나온 줄에서 한 번 넘어가야 코인
       if(ev.type==='frozen'){if(!ev.b.remote)alertOn(ev.b);if(live&&mode==='hide'){sus(ev.b,3.2);if(ev.b===player)say('넘어가다 걸렸다!',1.2);}}
       if(ev.type==='light'){if(live)lightSound(ev.s);if(ev.s==='green')alertsOff();if(live&&mode==='hide')recLight(ev.s);if(live&&mode==='seek'&&ev.s==='green'){const ctx=aiCtx();bots.forEach(b=>{if(!b.found&&!b.gone&&!b.remote)botPlan(world,b,ctx);});}}});
     {const on=live&&world.light==='red';stage.classList.toggle('red',on);$('redTag').hidden=!on;if(on)$('redTag').textContent=mode==='seek'?`보는 중 ${Math.max(0,2.5-world.lightT).toFixed(1)}초 · 지금 옆으로 가는 상자는 !`:'직원이 보는 중';}
@@ -31,7 +32,7 @@ function frame(now){const dt=Math.min(.05,(now-last)/1000);last=now;const cl=!!(
     world.events=[];
 
     world.boxes.forEach(b=>{const m=meshFor(b);if(b.gone||b.pending||inTun(b)){m.g.visible=false;return;}m.g.visible=true;
-      const [x,y]=world.pos(b);let h=0;if(m.bump>0){m.bump-=dt;h=Math.abs(Math.sin(m.bump*30))*.15;}m.g.position.set(wx(x),h,wz(y));});
+      let [x,y]=world.pos(b);if(b.vo){x+=b.vo[0];y+=b.vo[1];const k=Math.exp(-dt/.12);b.vo[0]*=k;b.vo[1]*=k;if(Math.abs(b.vo[0])+Math.abs(b.vo[1])<.01)b.vo=null;}let h=0;if(m.bump>0){m.bump-=dt;h=Math.abs(Math.sin(m.bump*30))*.15;}m.g.position.set(wx(x),h,wz(y));});
     stampMeshes.forEach((g,i)=>{const c=g.userData.coin;c.quaternion.copy(cam.quaternion).multiply(coinQ);c.scale.x=.25+.75*Math.abs(Math.cos(now/260+i));c.position.y=2.6+.25*Math.sin(now/300+i);}); // 동전 면이 늘 카메라를 보고, 가로로 좁아졌다 넓어지며 도는 것처럼
     pool.forEach(s=>{const f=Math.max(0,s.t/STAMP_LIFE),r=s.mesh.children[0],c=s.mesh.userData.coin,mine=mode==='hide'&&player&&player.took&&player.took.has(s.id);
       s.mesh.visible=!mine;r.scale.setScalar(.35+.65*f);c.visible=!(s.t<3&&Math.floor(now/120)%2);}); // 고리가 줄어들고, 3초 남으면 동전이 깜빡. 내가 먹은 건 내 화면에서만 지운다(남들 화면엔 그대로라 들통나지 않음)
