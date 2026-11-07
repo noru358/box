@@ -428,10 +428,10 @@ function clearMeshes(){meshes.forEach(m=>S.remove(m.g));meshes=new Map();}
 // 코인 그리기(규칙은 engine.js "코인"): 두 레일 사이 틈 위, 상자 높이에 떠서 도는 동전(보이는 자리 = 닿는 자리).
 // 수명이 줄면 작아지고, 3초 남으면 깜빡. 내가 먹은 코인은 내 화면에서만 지운다(loop.js)
 let coins=[],coinMeshes=new Map();
-const coinMat=B('#ffcc33'),coinRim=B('#1e1c18'),coinGeo=new THREE.CylinderGeometry(1,1,.18,28),coinRimGeo=new THREE.CylinderGeometry(1.2,1.2,.1,28),coinQ=new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1,0,0),Math.PI/2);
-// 코인 = 금색 동전 + 검은 테두리, 늘 정면(loop.js)
+const coinMat=M('#ffcc33'),coinGeo=new THREE.CylinderGeometry(.75,.75,.18,24),coinQ=new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1,0,0),Math.PI/2);
+// 코인 = 조명 받는 금색 동전(3D), 카메라를 보며 도는 것처럼 폭이 변함(loop.js)
 function coinMesh(c){let g=coinMeshes.get(c.id);if(g)return g;g=new THREE.Group();
-  const k=new THREE.Group(),face=new THREE.Mesh(coinGeo,coinMat),rim=new THREE.Mesh(coinRimGeo,coinRim);rim.position.y=-.06;k.add(face,rim);k.position.y=1.1;g.add(k);g.userData={coin:k};g.position.set(wx(c.x),0,wz(c.y));S.add(g);coinMeshes.set(c.id,g);return g;}
+  const k=new THREE.Mesh(coinGeo,coinMat);k.position.y=1.1;g.add(k);g.userData={coin:k};g.position.set(wx(c.x),0,wz(c.y));S.add(g);coinMeshes.set(c.id,g);return g;}
 function syncCoins(){const ids=new Set(coins.map(c=>c.id));coinMeshes.forEach((g,id)=>{if(!ids.has(id)){S.remove(g);coinMeshes.delete(id);}});coins.forEach(coinMesh);}
 function clearCoins(){coins=[];syncCoins();}
 function aimCoin(b){b.took=b.took||new Set();b.coin=pickCoin(world,b,coins);}
@@ -733,7 +733,7 @@ function frame(now){const raw=(now-last)/1000,dt=Math.min(.05,raw);last=now;if(r
     coins.forEach((c,i)=>{const g=coinMeshes.get(c.id);if(!g)return;const k=g.userData.coin,f=Math.max(0,c.t/COIN_LIFE);
       g.visible=!(mode==='hide'&&player&&player.took&&player.took.has(c.id)); // 내가 먹은 코인은 내 화면에서만 지운다(남들 화면엔 그대로라 들통나지 않음)
       k.scale.y=k.scale.z=.6+.4*f;k.visible=!(c.t<3&&Math.floor(now/120)%2);
-      k.quaternion.copy(cam.quaternion).multiply(coinQ);k.scale.x=.6+.4*f;k.position.y=1.1+.12*Math.sin(now/300+i);}); // 크기가 수명. 납작하게 도는 건 뺌(작아 보이고 스티커와 헷갈림) // 동전 면이 늘 카메라를 본다
+      k.quaternion.copy(cam.quaternion).multiply(coinQ);k.scale.x=(.25+.75*Math.abs(Math.cos(now/260+i)))*(.6+.4*f);k.position.y=1.1+.12*Math.sin(now/300+i);}); // 크기가 수명, 폭이 변하며 도는 것처럼(v13.5 모양) // 동전 면이 늘 카메라를 본다
     const hv=!!(hover&&mode==='seek'&&!over&&!hover.gone&&!hover.found);hoverRing.visible=hv;if(hv){const [hx,hy]=world.pos(hover);hoverRing.position.set(wx(hx),.42,wz(hy));}
     if(mode==='hide'&&player&&!player.pending){const [x,y]=world.pos(player);const X=wx(x),Z=wz(y),h=player.size*.8+.33;
       meArrow.position.set(X,h+1.4+.35*Math.sin(now/220),Z);meArrow.quaternion.copy(cam.quaternion);meArrow.scale.setScalar(1.35);
