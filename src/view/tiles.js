@@ -9,9 +9,12 @@ const P=CS*.82;
 const triGeo=(()=>{const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute([.55,0,0,-.35,0,-.42,-.35,0,.42],3));return g;})();
 function arrow(d,color,ox=0,oz=0,s=1){const a=new THREE.Mesh(triGeo,B(color));a.rotation.y=-d*Math.PI/2;a.scale.setScalar(s);a.position.set(ox,.34,oz);return a;}
 const box=(key,w,h,d,mat)=>new THREE.Mesh(geo(key,()=>new THREE.BoxGeometry(w,h,d)),mat);
+// 연결 분기 짝 방향(engine.js w.pairSides와 같은 규칙, 칸 표만으로)
+const pairsOf=(tiles,x,y)=>{const t=(tiles[y]||[])[x];if(!t||!t.sw)return [];return [(t.d+1)%4,(t.d+3)%4].filter(h=>{const n=(tiles[y+DV[h][1]]||[])[x+DV[h][0]];return !!(n&&n.sw);});};
 const TILE_LOOK={
   belt:{base:'#3a3936'},
-  switch:{base:'#c99a1e',add(g,t){[-1,1].forEach(k=>g.add(arrow((t.d+(k>0?1:3))%4,'#1e1c18',DV[(t.d+1)%4][0]*k*.95,DV[(t.d+1)%4][1]*k*.95,.55)));}}, // 노란 판 + 옆 화살표
+  // 노란 판 + 옆 화살표. 연결 분기(옆 레일 같은 줄도 분기 칸)면 짝 쪽 화살표만, 그리고 짝 쪽으로 다리(아래 buildTiles)
+  switch:{base:'#c99a1e',add(g,t,x,y,tiles){const ps=pairsOf(tiles,x,y);(ps.length?ps:[(t.d+1)%4,(t.d+3)%4]).forEach(h=>g.add(arrow(h,'#1e1c18',DV[h][0]*.95,DV[h][1]*.95,.55)));}},
   tunnel:{base:'#3a3936',add(g,t,x,y,tiles){ // 덮개, 바깥쪽 벽(옆도 터널이면 벽 없음), 노란 줄
     const roof=box('roof',CS*1.01,.35,CS*1.01,M('#4a4640'));roof.position.y=2.75;g.add(roof);const v=t.d%2;
     [-1,1].forEach(s=>{const n=(tiles[y+(v?0:s)]||[])[x+(v?s:0)];if(n&&n.tun)return;const wall=box('wall'+v,v?.25:CS*1.01,2.6,v?CS*1.01:.25,M('#5a554d'));wall.position.set(v?s*CS*.5:0,1.3,v?0:s*CS*.5);g.add(wall);});
@@ -26,7 +29,9 @@ function buildTiles(tiles){S.remove(tileG);tileG=new THREE.Group();S.add(tileG);
   for(let y=0;y<H;y++)for(let x=0;x<W;x++){const t=tiles[y][x];if(!t)continue;const look=TILE_LOOK[t.k];const g=new THREE.Group();g.position.set(wx(x),0,wz(y));tileG.add(g);
     const p=box('plate',P,.3,P,M(look.base));p.position.y=.15;g.add(p);
     if(t.t==='belt')g.add(arrow(t.d,'#6f6c64',0,0,1.1));
-    if(look.add)look.add(g,t,x,y,tiles);}
+    if(look.add)look.add(g,t,x,y,tiles);
+    // 다리: 짝 분기 칸 사이(오른쪽·아래 짝만 그려 한 번씩). 다리 위에 코인이 멈춘다
+    pairsOf(tiles,x,y).filter(h=>h<2).forEach(h=>{const br=box('bridge'+h,h?P*.5:CS*.62,.34,h?CS*.62:P*.5,M('#c99a1e'));br.position.set(wx(x+DV[h][0]*.5),.17,wz(y+DV[h][1]*.5));tileG.add(br);});}
   fitCam();}
 // 화면 비율에 맞춰 카메라 거리: 16:9보다 좁으면 가로가 다 들어오게 뒤로, 넓으면(폰 가로) 세로가 다 들어오는 데까지 당긴다
 // 카메라: 내려다보는 각도는 고정, 실제 칸 범위 + 신호등 + (숨는 쪽이면) 직원이 화면 가장자리 6% 안에 꽉 차도록 거리와 중심을 맞춘다

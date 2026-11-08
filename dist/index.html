@@ -101,7 +101,7 @@ button{touch-action:manipulation}
     <button id="lookBtn">돌아보기 (Space)</button>
     <span class="note">상자를 클릭하면 스캔(사람이면 찾음, 아니면 −5초)</span>
   </div>
-  <p class="note" id="ver">v13.7 · 친구와 1:1 · 분기 칸 · 터널 · 굴러가는 코인 4개 · 바닥 조명 신호 · 판 90초</p>
+  <p class="note" id="ver">v13.7 실험(연결 분기) · 친구와 1:1 · 분기 칸 · 터널 · 굴러가는 코인 4개 · 바닥 조명 신호 · 판 90초</p>
 </div>
 
 
@@ -115,6 +115,9 @@ const DIRS='>v<^',DX=[1,0,-1,0],DY=[0,1,0,-1];
 const BASE=1.25; // 벨트 속도(칸/초)
 const WANDER=.45; // 분기 칸이 없는 맵에서 일반 상자가 초록에 옆으로 옮기는 빈도(초당, 한 초록에 한 번까지)
 // 분기 칸(v12-switch): 'W' 기호. 일반 상자는 분기 칸에서만 옆 레일로 간다(지날 때 SW_P 확률, 초록일 때).
+// 연결 분기(exp-junction): 옆 레일 같은 열에도 분기 칸이 있으면 둘이 짝(연결 분기). 일반 상자는 짝 쪽으로 넘어간다(짝이 없으면 아무 옆).
+// 코인은 연결 분기 칸에 오면 두 칸 사이 다리로 비켜 COIN_STOP초 멈춘다 → 다리를 건너는(분기에서 넘어가는) 안전한 움직임 = 코인 먹기.
+// 다리 위 코인은 양쪽 레일에서 0.5칸 옆이라 실려 가는 상자엔 안 닿고(닿음 0.45), 줄 세우기도 안 막는다(옆 0.42 넘음).
 // 미끼: 분기 칸 바로 앞뒤 칸에서 SW_BAIT 확률로 넘어가는 일반 상자도 있다. 사람은 어디서든 넘어갈 수 있지만 분기 칸이 아니면 티가 난다.
 const SW_P=.55,SW_BAIT=.06;
 // 터널: 'U' 기호. 덮개 아래라 찾는 쪽에게 안 보인다. 터널 안에서 터널 안으로 넘어가면 안 보이고 걸리지도 않는다. 일반 상자도 터널을 지날 때 TUN_P 확률로 한 번 안에서 갈아탄다(나온 줄이 바뀐 게 확실한 증거가 되지 않게).
@@ -129,12 +132,14 @@ function loopMap(){const W=14,H=8,g=Array.from({length:H},()=>Array(W).fill('..'
   for(let x=1;x<=11;x++)set(x,1,'n>');set(12,1,'nv');for(let y=2;y<=5;y++)set(12,y,'nv');set(12,6,'n<');for(let x=2;x<=11;x++)set(x,6,'n<');set(1,6,'n^');for(let y=2;y<=5;y++)set(1,y,'n^');
   for(let x=3;x<=11;x++)set(x,2,'n<');set(2,2,'nv');for(let y=3;y<=4;y++)set(2,y,'nv');set(2,5,'n>');for(let x=3;x<=10;x++)set(x,5,'n>');set(11,5,'n^');for(let y=3;y<=4;y++)set(11,y,'n^');
   set(3,3,'I>');for(let x=4;x<=9;x++)set(x,3,'n>');set(10,3,'X>');set(10,4,'I<');for(let x=4;x<=9;x++)set(x,4,'n<');set(3,4,'X<');
-  [[5,1,'W>'],[9,1,'W>'],[4,6,'W<'],[8,6,'W<'],[6,2,'W<'],[7,5,'W>'],[1,3,'W^'],[2,4,'Wv'],[6,3,'W>'],[7,4,'W<'],[12,3,'Uv'],[12,4,'Uv'],[11,3,'U^'],[11,4,'U^']].forEach(([x,y,t])=>set(x,y,t));
+  // 분기 칸은 짝(옆 레일 같은 줄)으로: 위 바깥-안 5·9열, 안-가운데 7열, 가운데 두 줄 7열, 가운데-아래 안-바깥 4열, 아래 8열, 왼쪽 3행
+  [[5,1,'W>'],[5,2,'W<'],[9,1,'W>'],[9,2,'W<'],[7,2,'W<'],[7,3,'W>'],[7,4,'W<'],[4,4,'W<'],[4,5,'W>'],[4,6,'W<'],[8,5,'W>'],[8,6,'W<'],[1,3,'W^'],[2,3,'Wv'],[12,3,'Uv'],[12,4,'Uv'],[11,3,'U^'],[11,4,'U^']].forEach(([x,y,t])=>set(x,y,t));
   return g.map(r=>r.join(' ')).join('/');}
 const MAPS={
-  compact:{name:'세로 폰용(9칸)',str:laneMap([{d:'>',ex:{2:'W>',6:'W>'}},{d:'<',ex:{3:'W<',6:'W<'}},{d:'>',ex:{2:'W>',5:'W>'}},{d:'>',ex:{2:'W>',4:'U>',5:'U>',7:'W>'}},{d:'>',ex:{2:'W>',4:'U>',5:'U>',7:'W>'}},{d:'<',ex:{3:'W<',6:'W<'}},{d:'>',ex:{2:'W>',5:'W>'}}],9)},
+  // 분기 칸 열이 이웃 레일과 겹치게(연결 분기): 1-2줄 2·6열, 2-3줄 4열, 3-4-5줄 7열, 4-5줄 2열, 5-6-7줄 7열, 6-7줄 3열
+  compact:{name:'세로 폰용(9칸)',str:laneMap([{d:'>',ex:{2:'W>',6:'W>'}},{d:'<',ex:{2:'W<',4:'W<',6:'W<'}},{d:'>',ex:{4:'W>',7:'W>'}},{d:'>',ex:{2:'W>',4:'U>',5:'U>',7:'W>'}},{d:'>',ex:{2:'W>',4:'U>',5:'U>',7:'W>'}},{d:'<',ex:{3:'W<',7:'W<'}},{d:'>',ex:{3:'W>',7:'W>'}}],9)},
   loop:{name:'굽은 길',str:loopMap()},
-  switch:{name:'분기',str:laneMap([{d:'>',ex:{3:'W>',7:'W>',11:'W>'}},{d:'<',ex:{5:'W<',9:'W<'}},{d:'>',ex:{3:'W>',6:'U>',7:'U>',8:'U>',11:'W>'}},{d:'>',ex:{5:'W>',6:'U>',7:'U>',8:'U>',9:'W>'}}])}
+  switch:{name:'분기',str:laneMap([{d:'>',ex:{3:'W>',10:'W>'}},{d:'<',ex:{3:'W<',5:'W<',10:'W<'}},{d:'>',ex:{5:'W>',6:'U>',7:'U>',8:'U>',11:'W>'}},{d:'>',ex:{5:'W>',6:'U>',7:'U>',8:'U>',11:'W>'}}])}
 };
 // 칸 종류 등록표. 맵 기호는 [종류 한 글자][방향 > v < ^]. 새 칸 종류는 여기 한 줄 + 화면 쪽 TILE_LOOK(그리는 법) 한 줄.
 // 칸 객체: {k: 등록표 키, t: 'belt'|'spawn'|'exit'(움직임 규칙), d: 방향, sw: 분기 칸, tun: 터널}
@@ -168,13 +173,24 @@ function createWorld(str,opt){opt=opt||{};const rng=opt.rng||Math.random;const {
   // 분기 칸 바로 앞이나 뒤(같은 레일)인가: 미끼 자리
   w.nearSwitch=(x,y)=>{const t=T(x,y);if(!t||t.sw)return false;return w.isSwitch(x+DX[t.d],y+DY[t.d])||w.isSwitch(x-DX[t.d],y-DY[t.d]);};
   w.hasSwitches=cells.some(([x,y])=>tiles[y][x].sw);
+  // 연결 분기: 이 분기 칸에서 옆(진행 방향에 수직)으로 같은 줄에 짝 분기 칸이 있는 방향들
+  w.pairSides=(x,y)=>{const t=T(x,y);if(!t||!t.sw)return [];return [(t.d+1)%4,(t.d+3)%4].filter(h=>w.isSwitch(x+DX[h],y+DY[h]));};
+  w.isJunction=(x,y)=>w.pairSides(x,y).length>0;
   // 넘어갈 수 있는 옆 방향 중 아무거나(-1 = 못 감)
   w.randSide=b=>{const t=T(b.cx,b.cy);if(!hopable(t))return -1;const o=[(t.d+1)%4,(t.d+3)%4].filter(h=>hopable(T(b.cx+DX[h],b.cy+DY[h])));return o.length?o[(rng()*o.length)|0]:-1;};
   w.add=function(kind){const free=cells.filter(([x,y])=>!w.boxes.some(b=>!b.gone&&b.cx===x&&b.cy===y)&&!w.coins.some(c=>!c.pending&&Math.abs(c.cx-x)+Math.abs(c.cy-y)<=1)&&tiles[y][x].t!=='exit');if(!free.length)return null;const [x,y]=free[(rng()*free.length)|0];
     const b={id:w.boxes.length,kind,size:[1.25,1.5,1.75][(rng()*3)|0],cx:x,cy:y,d:tiles[y][x].d,s:rng()*.9,follow:1,sus:0,deliv:0,gone:false,found:false,pending:false,slide:null,lastWin:-1};
     w.boxes.push(b);return b;};
   w.center=(x,y)=>[x,y];
-  w.pos=b=>{let x=b.cx+DX[b.d]*b.s,y=b.cy+DY[b.d]*b.s;if(b.slide){const k=1-Math.min(1,b.slide.t);x+=b.slide.ox*k;y+=b.slide.oy*k;}return [x,y];};
+  w.pos=b=>{let x=b.cx+DX[b.d]*b.s,y=b.cy+DY[b.d]*b.s;if(b.slide){const k=1-Math.min(1,b.slide.t);x+=b.slide.ox*k;y+=b.slide.oy*k;}
+    if(b.coin&&b.st){const f=b.st===1?Math.min(1,Math.max(0,(COIN_STOP-b.wait)/COIN_SHIFT)):Math.max(0,b.lv/COIN_SHIFT);x+=DX[b.bh]*.5*f;y+=DY[b.bh]*.5*f;} // 다리 위 코인: 칸 가운데에서 짝 쪽으로 반 칸
+    return [x,y];};
+  // 다리(연결 분기 한 쌍)에 이미 코인이 있나
+  w.bridgeBusy=(x,y,h,self)=>w.coins.some(o=>o!==self&&!o.pending&&o.st&&((o.cx===x&&o.cy===y&&o.bh===h)||(o.cx===x+DX[h]&&o.cy===y+DY[h]&&o.bh===(h+2)%4)));
+  // 코인을 다리에 올린다(빈 다리가 없으면 false)
+  w.toBridge=(c,rng2)=>{const o=w.pairSides(c.cx,c.cy).filter(h=>!w.bridgeBusy(c.cx,c.cy,h,c));if(!o.length)return false;c.bh=o[((rng2||rng)()*o.length)|0];c.st=1;c.wait=COIN_STOP;c.s=0;return true;};
+  // 다리에서 내려갈 칸: 상자·코인이 1.2칸 안에 없는 쪽(입고구 빈자리 규칙과 같음)
+  const cellFree=(x,y,self)=>![...w.boxes,...w.coins].some(o=>o!==self&&!o.gone&&!o.pending&&(()=>{const [ox,oy]=w.pos(o);return Math.hypot(ox-x,oy-y)<1.2;})());
   w.midMove=b=>!!(b.slide&&b.slide.t<1);
   function respawn(b){if(puppet){b.pending=true;return;}const free=spawns.filter(([x,y])=>![...w.boxes,...w.coins].some(o=>o!==b&&!o.gone&&!o.pending&&Math.hypot(o.cx+DX[o.d]*o.s-x,o.cy+DY[o.d]*o.s-y)<1)); // 코인도 차 있는 자리
     if(!free.length){b.pending=true;return;}const [x,y]=free[(rng()*free.length)|0];b.cx=x;b.cy=y;b.d=tiles[y][x].d;b.s=0;b.pending=false;b.slide=null;}
@@ -204,14 +220,15 @@ function createWorld(str,opt){opt=opt||{};const rng=opt.rng||Math.random;const {
     if(w.hasSwitches&&!puppet)for(const b of w.boxes){if(b.kind!=='npc'||b.gone||b.pending||w.midMove(b))continue;if(b.tunPass&&!w.isTunnel(b.cx,b.cy))b.tunPass=false;if(b.s>.5)continue;const key=b.cx+','+b.cy;if(b.swKey===key)continue;
       if(w.isTunnel(b.cx,b.cy)){b.swKey=key;if(!b.tunPass){b.tunPass=true;if(rng()<TUN_P){const h=w.tunSide(b);if(h>=0)w.hop(b,h);}}continue;} // 터널 안: 신호와 상관없이 가끔 갈아탐
       const sw=w.isSwitch(b.cx,b.cy),bait=!sw&&w.nearSwitch(b.cx,b.cy);if(!sw&&!bait)continue;b.swKey=key;
-      const ok=w.light==='green'||(w.light==='yellow'&&rng()<w.diff.late);if(ok&&rng()<(sw?SW_P:SW_BAIT)){const h=w.randSide(b);if(h>=0)w.hop(b,h);}}
+      const ok=w.light==='green'||(w.light==='yellow'&&rng()<w.diff.late);if(ok&&rng()<(sw?SW_P:SW_BAIT)){const ps=sw?w.pairSides(b.cx,b.cy):[];const h=ps.length?ps[(rng()*ps.length)|0]:w.randSide(b);if(h>=0)w.hop(b,h);}}
     if(rate>0&&!w.hasSwitches&&!puppet)for(const b of w.boxes){if(b.kind!=='npc'||b.gone||b.pending||w.midMove(b)||b.lastWin===w.win)continue;if(rng()<dt*rate){const h=w.randSide(b);if(h>=0)w.hop(b,h);}}
     // 차간 거리
     // 차간 거리: 상자와 코인 모두 같은 규칙(같은 방향으로 가는 앞의 것이 0.95칸 안이면 감속, 0.62칸이면 멈춤). 넘어가는 중인 상자는 무시.
     // 코인이 끼면 방향이 달라도(모퉁이에서 먼저 돈 코인) 앞에 있으면 줄 선다 — 안 그러면 모퉁이에서 실려 가다 코인에 닿는다
+    // 다리 위 코인(st 1)은 레일 위가 아니라 아무도 안 막는다
     const O=[...w.boxes,...w.coins],P=O.map(o=>(o.gone||o.pending)?null:w.pos(o));
     O.forEach((b,i)=>{b.follow=1;if(!P[i])return;const hx=DX[b.d],hy=DY[b.d];
-      for(let j=0;j<O.length;j++){if(j===i||!P[j])continue;if((O[j].d!==b.d&&!O[j].coin&&!b.coin)||O[j].slide)continue;const rx=P[j][0]-P[i][0],ry=P[j][1]-P[i][1];const al=rx*hx+ry*hy;if(al<=0||al>.95)continue;const lat=Math.abs(rx*hy-ry*hx);if(lat>.42)continue;
+      for(let j=0;j<O.length;j++){if(j===i||!P[j])continue;if((O[j].d!==b.d&&!O[j].coin&&!b.coin)||O[j].slide||O[j].st===1)continue;const rx=P[j][0]-P[i][0],ry=P[j][1]-P[i][1];const al=rx*hx+ry*hy;if(al<=0||al>.95)continue;const lat=Math.abs(rx*hy-ry*hx);if(lat>.42)continue;
         b.follow=Math.min(b.follow,Math.max(0,(al-.62)/.33));}});
     for(const b of w.boxes){if(b.gone)continue;if(b.slide){b.slide.t+=dt/.38;if(b.slide.t>=1)b.slide=null;}
       if(b.pending){respawn(b);continue;}b.sus=Math.max(0,b.sus-dt*.35);
@@ -220,13 +237,18 @@ function createWorld(str,opt){opt=opt||{};const rng=opt.rng||Math.random;const {
         if(!T(nx,ny)){s=0;break;}b.cx=nx;b.cy=ny;if(wrapped)b.slide=null;arrive(b);if(b.pending)break;}
       if(!b.pending)b.s=s;}
     // 코인: 벨트보다 느리게(COIN_SPEED배) 같은 길을 따라간다. 출고구에 닿으면 사라지고 빈자리에서 새로(퍼펫은 받은 상태를 기다림)
-    for(const c of w.coins){if(c.pending)continue;if(!puppet){c.t-=dt;if(c.t<=0){c.pending=true;continue;}}let s=c.s+BASE*COIN_SPEED*c.follow*dt;
-      while(s>=1){s-=1;let nx=c.cx+DX[c.d],ny=c.cy+DY[c.d];if(!T(nx,ny))[nx,ny]=wrap(nx,ny);const t=T(nx,ny);if(!t||t.t==='exit'){c.pending=true;break;}c.cx=nx;c.cy=ny;c.d=t.d;}
+    // 연결 분기 칸 가운데에 오면 다리로 비켜 COIN_STOP초 멈췄다가(st 1), 빈 쪽 레일로 내려간다(st 2, 원래 레일이나 짝 레일)
+    for(const c of w.coins){if(c.pending)continue;if(!puppet){c.t-=dt;if(c.t<=0&&!c.st){c.pending=true;continue;}}
+      if(c.st===1){c.wait-=dt;if(c.wait<=0&&!puppet){const o=[[c.cx,c.cy,0],[c.cx+DX[c.bh],c.cy+DY[c.bh],1]].filter(([x,y])=>cellFree(x,y,c));
+          if(o.length){const [x,y,flip]=o[(rng()*o.length)|0];if(flip){c.cx=x;c.cy=y;c.d=T(x,y).d;c.bh=(c.bh+2)%4;}c.st=2;c.lv=COIN_SHIFT;}}continue;}
+      if(c.st===2){c.lv-=dt;if(c.lv<=0){c.st=0;c.lv=0;}continue;}
+      let s=c.s+BASE*COIN_SPEED*c.follow*dt;
+      while(s>=1){s-=1;let nx=c.cx+DX[c.d],ny=c.cy+DY[c.d];if(!T(nx,ny))[nx,ny]=wrap(nx,ny);const t=T(nx,ny);if(!t||t.t==='exit'){c.pending=true;break;}c.cx=nx;c.cy=ny;c.d=t.d;if(w.toBridge(c)){s=0;break;}}
       if(!c.pending)c.s=s;}
     if(!puppet)w.coins.forEach((c,i)=>{if(c.pending){const n=placeCoin(w,rng);if(n)w.coins[i]=n;}});
   };
-  w.packCoins=()=>w.coins.map(c=>[c.id,c.cx,c.cy,c.d,+c.s.toFixed(3),c.pending?1:0,+(c.t||0).toFixed(1)]);
-  w.loadCoins=arr=>{w.coins=arr.map(([id,cx,cy,d,s,p,t])=>{const o=w.coins.find(c=>c.id===id)||{id,coin:true,follow:1};return Object.assign(o,{cx,cy,d,s,pending:!!p,t});});};
+  w.packCoins=()=>w.coins.map(c=>[c.id,c.cx,c.cy,c.d,+c.s.toFixed(3),c.pending?1:0,+(c.t||0).toFixed(1),c.st|0,c.bh|0,+(c.wait||0).toFixed(2),+(c.lv||0).toFixed(2)]);
+  w.loadCoins=arr=>{w.coins=arr.map(([id,cx,cy,d,s,p,t,st,bh,wt,lv])=>{const o=w.coins.find(c=>c.id===id)||{id,coin:true,follow:1};return Object.assign(o,{cx,cy,d,s,pending:!!p,t,st:st|0,bh:bh|0,wait:wt||0,lv:lv||0});});};
   // 친구와 하기: 상자 상태를 짧은 배열로 주고받는다 [id,cx,cy,d,s,크기,무늬,상태비트,slide t,ox,oy]
   w.packBoxes=function(){return w.boxes.map(b=>{const f=(b.gone?1:0)|(b.pending?2:0)|(b.found?4:0)|(b.alert?8:0)|(b.slide&&b.slide.hid?16:0);const a=[b.id,b.cx,b.cy,b.d,+b.s.toFixed(3),b.size,b.pat|0,f];
     if(b.slide&&b.slide.t<1)a.push(+b.slide.t.toFixed(2),+b.slide.ox.toFixed(2),+b.slide.oy.toFixed(2));return a;});};
@@ -246,12 +268,14 @@ function signalAI(diff,rng){rng=rng||Math.random;const r=(a)=>a[0]+rng()*(a[1]-a
 // 옆 레일에선 상자가 더 빠르니 코인 옆을 지나치게 되고, 나란할 때 넘어가면 닿는다. 맵 방향과 상관없이 성립하고 예외 규칙이 없다.
 // 코인 {id, cx, cy, d, s, follow, pending, t: 남은 수명}. 위치는 상자와 같은 w.pos. 출고구에 닿거나 수명이 다 되면 사라지고 빈자리에서 새로 나온다
 const COIN_N=4,COIN_GOAL=4,COIN_SPEED=.6,COIN_LIFE=14; // 수명: 출고구가 없는 고리 레일에서도 코인이 바뀌게(존버 방지), 다 되면 사라지고 빈자리에서 새로
+const COIN_STOP=2.5; // 연결 분기 다리 위에 코인이 멈춰 있는 시간(초). 난이도 손잡이: 길수록 쉬움
+const COIN_SHIFT=.25; // 레일 가운데 ↔ 다리로 비키는 데 걸리는 시간(초)
 const COIN_TOUCH=.45; // 상자 중심과 코인 중심이 가로·세로 둘 다 이 칸 수 안이면 닿음(줄 설 때 간격 0.62보다 작다)
 // 새 코인 자리: 일반 벨트 칸(분기 칸 포함, 터널·입고·출고 제외) 중 상자·코인이 1.2칸 안에 없는 곳, 되도록 다른 코인과 다른 레일 줄
 function placeCoin(w,rng){rng=rng||Math.random;const occ=[...w.boxes.filter(b=>!b.gone&&!b.pending),...w.coins.filter(c=>!c.pending)].map(o=>w.pos(o)),cand=[],near=[];
   for(let y=0;y<w.H;y++)for(let x=0;x<w.W;x++){const t=w.T(x,y);if(!t||t.t!=='belt'||t.tun)continue;if(occ.some(([ox,oy])=>Math.abs(ox-x)<1.2&&Math.abs(oy-y)<1.2))continue;
     (w.coins.some(c=>!c.pending&&(t.d%2?c.cx===x:c.cy===y))?near:cand).push([x,y,t.d]);}
-  const src=cand.length?cand:near;if(!src.length)return null;const [x,y,d]=src[(rng()*src.length)|0];return {id:++w.coinId,coin:true,cx:x,cy:y,d,s:0,follow:1,pending:false,t:COIN_LIFE*(.7+rng()*.3)};}
+  const src=cand.length?cand:near;if(!src.length)return null;const [x,y,d]=src[(rng()*src.length)|0];const c={id:++w.coinId,coin:true,cx:x,cy:y,d,s:0,follow:1,pending:false,t:COIN_LIFE*(.7+rng()*.3),st:0,bh:0,wait:0,lv:0};w.toBridge(c,rng);return c;}
 // 늘 COIN_N개. 빈자리가 없으면 그 코인은 대기(pending)했다가 자리가 나면 나온다(상자가 입고구 빈자리를 기다리는 것과 같음)
 function initCoins(w,rng){w.coins=[];for(let i=0;i<COIN_N;i++)w.coins.push(placeCoin(w,rng)||{id:++w.coinId,coin:true,cx:0,cy:0,d:0,s:0,follow:1,pending:true,t:0});return w.coins;}
 // 이 상자 몸에 닿아 있는 코인들(화면 위치 기준, 넘어가는 중이면 미끄러지는 위치로)
@@ -261,7 +285,7 @@ function coinTouched(w,b){if(!b||b.gone||b.pending)return [];const [x,y]=w.pos(b
 function coinStep(w,who){const got=[];for(const b of w.boxes){if(!who(b))continue;b.took=b.took||new Set();for(const c of coinTouched(w,b))if(!b.took.has(c.id)){b.took.add(c.id);b.got=(b.got|0)+1;got.push([b,c]);}}return got;}
 // 상자에서 코인까지: L = 몇 레일 옆인가(+면 오른쪽·아래, 0 = 같은 레일), fwd = 코인이 내 진행 방향으로 몇 칸 앞인가, rel = 내가 코인보다 초당 몇 칸 더 빠른가(나란해지는 속도)
 function coinGap(w,b,c){if(!c||c.pending)return null;const t0=w.T(b.cx,b.cy);if(!t0||t0.d%2!==c.d%2)return null;const [bx,by]=w.pos(b),[cx,cy]=w.pos(c),v=t0.d%2===1;
-  const L=Math.round(v?cx-bx:cy-by),fwd=(v?cy-by:cx-bx)*(v?DY[t0.d]:DX[t0.d]),rel=BASE*(1-(c.d===t0.d?COIN_SPEED:-COIN_SPEED));return {L,fwd,rel};}
+  const lat=v?cx-bx:cy-by,L=c.st?Math.sign(lat)*Math.ceil(Math.abs(lat)-.01):Math.round(lat),fwd=(v?cy-by:cx-bx)*(v?DY[t0.d]:DX[t0.d]),rel=c.st?BASE:BASE*(1-(c.d===t0.d?COIN_SPEED:-COIN_SPEED));return {L,fwd,rel};} // 정류장에 멈춘 코인은 내 속도 그대로 다가옴
 // 이 상자가 노릴 코인: 아직 안 먹은 것 중 (나란해질 때까지 걸리는 시간 + 레일 거리)가 가장 짧은 것. 이미 지나친 코인(뒤쪽)은 다시 안 만나므로 뒤로
 function pickCoin(w,b){let best=null,bc=1e9;for(const c of w.coins){if(b.took&&b.took.has(c.id))continue;const g=coinGap(w,b,c);if(!g)continue;
   const cost=(g.fwd>-.3?Math.max(0,g.fwd)/g.rel:30)+Math.abs(g.L)*.9;if(cost<bc){bc=cost;best=c;}}return best;}
@@ -272,7 +296,7 @@ function coinDir(w,b,c){const g=coinGap(w,b,c);if(!g)return {h:-1,ready:false,on
   const h=v?(g.L>0?0:2):(g.L>0?1:3),on=Math.abs(g.L)===1;if(h%2===b.d%2)return {h:-1,ready:false,on};
   const nt=w.T(b.cx+DX[h],b.cy+DY[h]);if(!nt||nt.t==='exit')return {h:-1,ready:false,on};
   return {h,on,ready:on&&Math.abs(g.fwd-g.rel*.19)<.35};}
-if(typeof module!=='undefined')module.exports={TUN_P,SW_P,SW_BAIT,WANDER,BASE,COIN_N,COIN_GOAL,COIN_SPEED,COIN_LIFE,COIN_TOUCH,placeCoin,initCoins,coinTouched,coinStep,coinGap,pickCoin,coinDir,signalAI,createWorld,MAPS,TILES,parseMap,mapToStr,parseTile,tileToken,laneMap,DIFF,DIRS,DX,DY};
+if(typeof module!=='undefined')module.exports={TUN_P,SW_P,SW_BAIT,WANDER,BASE,COIN_N,COIN_GOAL,COIN_SPEED,COIN_LIFE,COIN_STOP,COIN_SHIFT,COIN_TOUCH,placeCoin,initCoins,coinTouched,coinStep,coinGap,pickCoin,coinDir,signalAI,createWorld,MAPS,TILES,parseMap,mapToStr,parseTile,tileToken,laneMap,DIFF,DIRS,DX,DY};
 
 // ===== src/ai.js =====
 // ===== AI (규칙만, 화면 없음 — 브라우저·node 공용, engine.js 뒤에 붙는다) =====
@@ -375,9 +399,12 @@ const P=CS*.82;
 const triGeo=(()=>{const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute([.55,0,0,-.35,0,-.42,-.35,0,.42],3));return g;})();
 function arrow(d,color,ox=0,oz=0,s=1){const a=new THREE.Mesh(triGeo,B(color));a.rotation.y=-d*Math.PI/2;a.scale.setScalar(s);a.position.set(ox,.34,oz);return a;}
 const box=(key,w,h,d,mat)=>new THREE.Mesh(geo(key,()=>new THREE.BoxGeometry(w,h,d)),mat);
+// 연결 분기 짝 방향(engine.js w.pairSides와 같은 규칙, 칸 표만으로)
+const pairsOf=(tiles,x,y)=>{const t=(tiles[y]||[])[x];if(!t||!t.sw)return [];return [(t.d+1)%4,(t.d+3)%4].filter(h=>{const n=(tiles[y+DV[h][1]]||[])[x+DV[h][0]];return !!(n&&n.sw);});};
 const TILE_LOOK={
   belt:{base:'#3a3936'},
-  switch:{base:'#c99a1e',add(g,t){[-1,1].forEach(k=>g.add(arrow((t.d+(k>0?1:3))%4,'#1e1c18',DV[(t.d+1)%4][0]*k*.95,DV[(t.d+1)%4][1]*k*.95,.55)));}}, // 노란 판 + 옆 화살표
+  // 노란 판 + 옆 화살표. 연결 분기(옆 레일 같은 줄도 분기 칸)면 짝 쪽 화살표만, 그리고 짝 쪽으로 다리(아래 buildTiles)
+  switch:{base:'#c99a1e',add(g,t,x,y,tiles){const ps=pairsOf(tiles,x,y);(ps.length?ps:[(t.d+1)%4,(t.d+3)%4]).forEach(h=>g.add(arrow(h,'#1e1c18',DV[h][0]*.95,DV[h][1]*.95,.55)));}},
   tunnel:{base:'#3a3936',add(g,t,x,y,tiles){ // 덮개, 바깥쪽 벽(옆도 터널이면 벽 없음), 노란 줄
     const roof=box('roof',CS*1.01,.35,CS*1.01,M('#4a4640'));roof.position.y=2.75;g.add(roof);const v=t.d%2;
     [-1,1].forEach(s=>{const n=(tiles[y+(v?0:s)]||[])[x+(v?s:0)];if(n&&n.tun)return;const wall=box('wall'+v,v?.25:CS*1.01,2.6,v?CS*1.01:.25,M('#5a554d'));wall.position.set(v?s*CS*.5:0,1.3,v?0:s*CS*.5);g.add(wall);});
@@ -392,7 +419,9 @@ function buildTiles(tiles){S.remove(tileG);tileG=new THREE.Group();S.add(tileG);
   for(let y=0;y<H;y++)for(let x=0;x<W;x++){const t=tiles[y][x];if(!t)continue;const look=TILE_LOOK[t.k];const g=new THREE.Group();g.position.set(wx(x),0,wz(y));tileG.add(g);
     const p=box('plate',P,.3,P,M(look.base));p.position.y=.15;g.add(p);
     if(t.t==='belt')g.add(arrow(t.d,'#6f6c64',0,0,1.1));
-    if(look.add)look.add(g,t,x,y,tiles);}
+    if(look.add)look.add(g,t,x,y,tiles);
+    // 다리: 짝 분기 칸 사이(오른쪽·아래 짝만 그려 한 번씩). 다리 위에 코인이 멈춘다
+    pairsOf(tiles,x,y).filter(h=>h<2).forEach(h=>{const br=box('bridge'+h,h?P*.5:CS*.62,.34,h?CS*.62:P*.5,M('#c99a1e'));br.position.set(wx(x+DV[h][0]*.5),.17,wz(y+DV[h][1]*.5));tileG.add(br);});}
   fitCam();}
 // 화면 비율에 맞춰 카메라 거리: 16:9보다 좁으면 가로가 다 들어오게 뒤로, 넓으면(폰 가로) 세로가 다 들어오는 데까지 당긴다
 // 카메라: 내려다보는 각도는 고정, 실제 칸 범위 + 신호등 + (숨는 쪽이면) 직원이 화면 가장자리 6% 안에 꽉 차도록 거리와 중심을 맞춘다
